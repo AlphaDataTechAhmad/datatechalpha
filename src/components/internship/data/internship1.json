@@ -1,0 +1,27 @@
+{
+  "id": "internship1",
+  "title": "Web Development Internship",
+  "description": "Test your web development skills",
+  "questions": [
+    {
+      "id": 1,
+      "question": "What is React and what are its key features?",
+      "type": "text",
+      "points": 5
+    },
+    {
+      "id": 2,
+      "question": "Explain the difference between let, const, and var in JavaScript.",
+      "type": "text",
+      "points": 5
+    },
+    {
+      "id": 3,
+      "question": "What is the virtual DOM in React?",
+      "type": "text",
+      "points": 10
+    }
+  ],
+  "durationMinutes": 30,
+  "passingScore": 12
+}

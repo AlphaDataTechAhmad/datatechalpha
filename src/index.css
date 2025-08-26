@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-sans text-dark-700 dark:text-white bg-white dark:bg-dark-900 transition-colors duration-300;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-display font-bold tracking-tight;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply px-6 py-3 rounded-lg font-medium transition-all duration-300 transform hover:scale-105 active:scale-95;
+  }
+
+  .btn-primary {
+    @apply bg-primary-500 text-white hover:bg-primary-600 shadow-md hover:shadow-lg;
+  }
+
+  .btn-secondary {
+    @apply bg-secondary-500 text-white hover:bg-secondary-600 shadow-md hover:shadow-lg;
+  }
+
+  .btn-outline {
+    @apply border-2 border-primary-500 text-primary-500 hover:bg-primary-500 hover:text-white dark:border-primary-400 dark:text-primary-400 dark:hover:bg-primary-500 dark:hover:text-white;
+  }
+
+  .btn-accent {
+    @apply bg-accent-500 text-white hover:bg-accent-600 shadow-md hover:shadow-lg;
+  }
+
+  .glass-card {
+    @apply bg-white/10 backdrop-blur-lg border border-white/20 dark:bg-dark-800/50 dark:border-dark-700/50 rounded-2xl shadow-glass;
+  }
+
+  .neon-border {
+    @apply border border-primary-500/50 shadow-neon dark:shadow-neon;
+  }
+
+  .neon-border-purple {
+    @apply border border-secondary-500/50 shadow-neon-purple;
+  }
+
+  .section-title {
+    @apply text-4xl md:text-5xl font-bold mb-6 text-dark-800 dark:text-white;
+  }
+  
+  /* Styles for deactivated account state */
+  body.deactivated-account header {
+    position: relative;
+    z-index: 9997;
+  }
+  
+  /* Ensure header is properly masked */
+  body.deactivated-account header::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4rem; /* Match your header height */
+    background: rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(4px);
+    z-index: -1;
+  }
+
+  .section-subtitle {
+    @apply text-xl text-dark-500 dark:text-dark-200 mb-12 max-w-3xl mx-auto;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100 dark:bg-dark-800;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-primary-400/50 dark:bg-primary-500/70 rounded-full;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-primary-500/80 dark:bg-primary-400;
+}
+
+.gradient-text {
+  @apply text-transparent bg-clip-text bg-gradient-to-r from-primary-500 via-secondary-500 to-accent-500;
+}
+
+.grid-background {
+  background-size: 30px 30px;
+  @apply bg-grid-pattern;
+}
+
+/* Ensure search input text is black in both light and dark themes */
+.search-input input {
+  color: black !important;
+  -webkit-text-fill-color: black !important;
+}
+
+.dark .search-input input {
+  color: black !important;
+  -webkit-text-fill-color: black !important;
+}
+
+/* Add a custom class with higher specificity */
+.chat-search-input {
+  color: black !important;
+  -webkit-text-fill-color: black !important;
+}
+
+.dark .chat-search-input {
+  color: black !important;
+  -webkit-text-fill-color: black !important;
+}
+body.test-mode {
+  padding-top: 0 !important;
+}
+
+header.hidden {
+  display: none !important;
+}

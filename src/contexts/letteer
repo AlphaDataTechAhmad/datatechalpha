@@ -1,0 +1,554 @@
+import { createContext, useContext, useEffect, useState, useCallback, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { account, databases, signOutAccount, signInAccount } from '../Services/appwrite';
+import { Query } from 'appwrite';
+
+// Database constants
+const DATABASE_ID = '68261b6a002ba6c3b584';
+const PROFILE_COLLECTION_ID = "68261bb5000a54d8652b";
+
+// Interfaces
+interface User {
+  $id: string;
+  accountId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  bio?: string;
+  location?: string;
+  imageUrl: string;
+  enrolledCourses: any[];
+  $createdAt: string;
+  role?: string;
+}
+
+interface AuthError {
+  message: string;
+  code?: string;
+  details?: any;
+}
+
+interface AuthCheckResult {
+  isAuthenticated: boolean;
+  user: User | null;
+  error?: string;
+  errorCode?: string;
+}
+
+interface AuthContextType {
+  user: User | null;
+  setUser: React.Dispatch<React.SetStateAction<User | null>>;
+  isLoading: boolean;
+  isInitialized: boolean;
+  isAuthenticated: boolean;
+  error: AuthError | null;
+  login: (email: string, password: string) => Promise<AuthCheckResult>;
+  checkAuthUser: () => Promise<AuthCheckResult>;
+  refreshUserData: () => Promise<boolean>;
+  logout: () => Promise<void>;
+  clearError: () => void;
+}
+
+// Add type for the account response
+interface AppwriteAccount {
+  $id: string;
+  name: string;
+  email: string;
+  $createdAt: string;
+}
+
+// Define ProfileDoc type
+interface ProfileDoc {
+  $id: string;
+  accountId: string;
+  name: string;
+  email: string;
+  phone?: string;
+  bio?: string;
+  location?: string;
+  imageUrl: string;
+  enrolledCourses: any[];
+  $createdAt: string;
+  $updatedAt: string;
+  role?: string;
+}
+
+const INITIAL_STATE: AuthContextType = {
+  user: null,
+  setUser: () => {},
+  isLoading: true,
+  isInitialized: false,
+  isAuthenticated: false,
+  error: null,
+  login: async () => ({ isAuthenticated: false, user: null }),
+  checkAuthUser: async () => ({ isAuthenticated: false, user: null }),
+  refreshUserData: async () => false,
+  logout: async () => {},
+  clearError: () => {}
+};
+
+const AuthContext = createContext<AuthContextType>(INITIAL_STATE);
+
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
+  const [user, setUser] = useState<User | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isInitialized, setIsInitialized] = useState(false);
+  const [error, setError] = useState<AuthError | null>(null);
+  const navigate = useNavigate();
+
+  const clearError = useCallback(() => setError(null), []);
+
+  const clearAuthState = useCallback(async (): Promise<void> => {
+    try {
+      await signOutAccount();
+    } catch (error) {
+      console.error('Error during sign out:', error);
+    } finally {
+      setUser(null);
+      setIsAuthenticated(false);
+      localStorage.removeItem('isAuthenticated');
+    }
+  }, []);
+
+  const checkAuthUser = useCallback(async (): Promise<AuthCheckResult> => {
+    setIsLoading(true);
+    try {
+      const currentAccount = await account.get() as AppwriteAccount;
+      
+      let profileDoc: ProfileDoc | null = null;
+      try {
+        profileDoc = await databases.getDocument<ProfileDoc>(
+          DATABASE_ID,
+          PROFILE_COLLECTION_ID,
+          currentAccount.$id
+        );
+      } catch (e) {
+        try {
+          const profileList = await databases.listDocuments<ProfileDoc>(
+            DATABASE_ID,
+            PROFILE_COLLECTION_ID,
+            [Query.equal('accountId', currentAccount.$id)]
+          );
+          if (profileList.documents.length > 0) {
+            profileDoc = profileList.documents[0];
+          }
+        } catch (listError) {
+          console.error('Error fetching profile via list query:', listError);
+        }
+      }
+      
+      const userData: User = {
+        $id: currentAccount.$id,
+        accountId: currentAccount.$id,
+        name: profileDoc?.name || currentAccount.name || currentAccount.email.split('@')[0],
+        email: currentAccount.email,
+        phone: profileDoc?.phone || '',
+        bio: profileDoc?.bio || '',
+        location: profileDoc?.location || '',
+        imageUrl: profileDoc?.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profileDoc?.name || currentAccount.name || currentAccount.email.split('@')[0])}&background=random`,
+        enrolledCourses: profileDoc?.enrolledCourses || [],
+        $createdAt: profileDoc?.$createdAt || currentAccount.$createdAt || new Date().toISOString(),
+        role: profileDoc?.role || 'student'
+      };
+
+      setUser(userData);
+      setIsAuthenticated(true);
+      localStorage.setItem('isAuthenticated', 'true');
+      
+      return { isAuthenticated: true, user: userData };
+    } catch (error) {
+      await clearAuthState();
+      return { isAuthenticated: false, user: null };
+    } finally {
+      setIsLoading(false);
+      setIsInitialized(true);
+    }
+  }, [clearAuthState]);
+
+  useEffect(() => {
+    const initializeAuth = async () => {
+      const storedAuth = localStorage.getItem('isAuthenticated') === 'true';
+      if (storedAuth) {
+        await checkAuthUser();
+      } else {
+        setIsLoading(false);
+        setIsInitialized(true);
+      }
+    };
+    initializeAuth();
+  }, [checkAuthUser]);
+
+  const login = useCallback(async (email: string, password: string): Promise<AuthCheckResult> => {
+    setIsLoading(true);
+    try {
+      await signInAccount(email, password);
+      return await checkAuthUser();
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to login';
+      setError({ message: errorMessage, code: error.code });
+      setIsLoading(false);
+      return { isAuthenticated: false, user: null, error: errorMessage };
+    }
+  }, [checkAuthUser]);
+
+  const logout = useCallback(async (): Promise<void> => {
+    await clearAuthState();
+    navigate('/login');
+  }, [clearAuthState, navigate]);
+
+  const refreshUserData = useCallback(async (): Promise<boolean> => {
+    const result = await checkAuthUser();
+    return result.isAuthenticated;
+  }, [checkAuthUser]);
+
+  const value = useMemo(() => ({
+    user,
+    setUser,
+    isLoading,
+    isInitialized,
+    isAuthenticated,
+    error,
+    login,
+    checkAuthUser,
+    refreshUserData,
+    logout,
+    clearError
+  }), [
+    user,
+    isLoading,
+    isInitialized,
+    isAuthenticated,
+    error,
+    login,
+    checkAuthUser,
+    refreshUserData,
+    logout,
+    clearError
+  ]);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+export const useAuth = (): AuthContextType => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+export default AuthContext;
+      $createdAt: string;
+      $updatedAt: string;
+      role?: string;
+    }
+    
+    let currentAccount: AppwriteAccount;
+    let profileDoc: ProfileDoc | undefined;
+    try {
+      setIsLoading(true);
+      console.log('Starting checkAuthUser...');
+      
+      // Get current account
+      const currentAccount = await account.get();
+      console.log('Current account:', { id: currentAccount.$id, email: currentAccount.email });
+      
+      // Try to get profile
+      let profileDoc;
+      try {
+        // First try direct get by account ID
+        profileDoc = await databases.getDocument(
+          DATABASE_ID,
+          PROFILE_COLLECTION_ID,
+          currentAccount.$id
+        );
+        console.log('Profile document found via direct get:', profileDoc);
+      } catch (directGetError) {
+        console.log('Profile not found with direct get, trying list query...');
+        try {
+          const profileList = await databases.listDocuments(
+            DATABASE_ID,
+            PROFILE_COLLECTION_ID,
+            [Query.equal('accountId', currentAccount.$id)]
+          );
+          if (profileList.documents.length > 0) {
+            profileDoc = profileList.documents[0];
+            console.log('Profile found via list query:', profileDoc);
+          }
+        } catch (listError) {
+          console.log('Error fetching profile via list query:', listError);
+          // Continue with profile creation if not found
+        }
+      }
+      
+      // If still no profile, create one
+      if (!profileDoc) {
+        console.log('Creating new profile for user:', currentAccount.$id);
+        try {
+          const newProfileData = {
+            accountId: currentAccount.$id,
+            name: currentAccount.name || currentAccount.email.split('@')[0],
+            email: currentAccount.email,
+            role: 'student',
+            emailVerification: false,
+            imageUrl: '',
+            enrolledCourses: []
+          };
+          
+          profileDoc = await databases.createDocument(
+            DATABASE_ID,
+            PROFILE_COLLECTION_ID,
+            currentAccount.$id,
+            newProfileData,
+            [
+              Permission.read(Role.user(currentAccount.$id)),
+              Permission.update(Role.user(currentAccount.$id)),
+              Permission.delete(Role.user(currentAccount.$id))
+            ]
+          );
+          console.log('New profile created:', profileDoc);
+        } catch (createError) {
+          console.error('Error creating profile:', createError);
+          // Continue with minimal user data if profile creation fails
+          const minimalUserData = {
+            $id: currentAccount.$id,
+            accountId: currentAccount.$id,
+            name: currentAccount.name || 'User',
+            email: currentAccount.email,
+            role: 'student',
+            imageUrl: '',
+            enrolledCourses: [],
+            $createdAt: new Date().toISOString(),
+            $updatedAt: new Date().toISOString()
+          };
+          
+          setUser(minimalUserData);
+          setIsAuthenticated(true);
+          
+          return {
+            isAuthenticated: true,
+            user: minimalUserData,
+            error: 'Profile data could not be loaded',
+            errorCode: 'profile_error'
+          };
+        }
+      }
+      
+      // Create user object with all fields
+      const userData = {
+        $id: currentAccount.$id,
+        accountId: currentAccount.$id,
+        name: profileDoc.name || currentAccount.name || currentAccount.email.split('@')[0],
+        email: currentAccount.email,
+        phone: profileDoc.phone || '',
+        bio: profileDoc.bio || '',
+        location: profileDoc.location || '',
+        imageUrl: profileDoc.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profileDoc.name || currentAccount.name || currentAccount.email.split('@')[0])}&background=random`,
+        enrolledCourses: profileDoc.enrolledCourses || [],
+        $createdAt: profileDoc.$createdAt || currentAccount.$createdAt || new Date().toISOString(),
+        role: profileDoc.role || 'student'
+      };
+
+      console.log('Setting user data in context:', userData);
+      setUser(userData);
+      setIsAuthenticated(true);
+      localStorage.setItem('isAuthenticated', 'true');
+      
+      return {
+        isAuthenticated: true,
+        user: userData
+      };
+      
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      await clearAuthState();
+      return { isAuthenticated: false, user: null };
+    } finally {
+      setIsLoading(false);
+      setIsInitialized(true);
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setIsLoading(false);
+        setIsInitialized(true);
+      }
+    };
+
+    checkAuth();
+  }, [checkAuthUser]);
+
+  // Update ref when checkAuthUser changes
+  useEffect(() => {
+    checkAuthUserRef.current = checkAuthUser;
+  }, [checkAuthUser]);
+
+  // Check authentication status
+  const checkAuthUser = useCallback(async (): Promise<AuthCheckResult> => {
+    try {
+      setIsLoading(true);
+      console.log('Starting checkAuthUser...');
+      
+      // Get current account
+      const currentAccount = await account.get() as AppwriteAccount;
+      console.log('Current account:', { id: currentAccount.$id, email: currentAccount.email });
+      
+      // Try to get profile
+      let profileDoc;
+      try {
+        // First try direct get by account ID
+        profileDoc = await databases.getDocument(
+          DATABASE_ID,
+          PROFILE_COLLECTION_ID,
+          currentAccount.$id
+        ) as any;
+        console.log('Profile document found via direct get:', profileDoc);
+      } catch (directGetError) {
+        console.log('Profile not found with direct get, trying list query...');
+        try {
+          const profileList = await databases.listDocuments(
+            DATABASE_ID,
+            PROFILE_COLLECTION_ID,
+            [Query.equal('accountId', currentAccount.$id)]
+          );
+          if (profileList.documents.length > 0) {
+            profileDoc = profileList.documents[0];
+            console.log('Profile found via list query:', profileDoc);
+          }
+        } catch (listError) {
+          console.log('Error fetching profile via list query:', listError);
+        }
+      }
+      
+      // Create user object with all fields
+      const userData: User = {
+        $id: currentAccount.$id,
+        accountId: currentAccount.$id,
+        name: profileDoc?.name || currentAccount.name || currentAccount.email.split('@')[0],
+        email: currentAccount.email,
+        phone: profileDoc?.phone || '',
+        bio: profileDoc?.bio || '',
+        location: profileDoc?.location || '',
+        imageUrl: profileDoc?.imageUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(profileDoc?.name || currentAccount.name || currentAccount.email.split('@')[0])}&background=random`,
+        enrolledCourses: profileDoc?.enrolledCourses || [],
+        $createdAt: profileDoc?.$createdAt || currentAccount.$createdAt || new Date().toISOString(),
+        role: profileDoc?.role || 'student'
+      };
+
+      console.log('Setting user data in context:', userData);
+      setUser(userData);
+      setIsAuthenticated(true);
+      localStorage.setItem('isAuthenticated', 'true');
+      
+      return {
+        isAuthenticated: true,
+        user: userData
+      };
+      
+    } catch (error) {
+      console.error('Error checking auth status:', error);
+      await clearAuthState();
+      return { isAuthenticated: false, user: null };
+    } finally {
+      setIsLoading(false);
+      setIsInitialized(true);
+    }
+  }, [clearAuthState, setIsLoading, setIsInitialized, setUser, setIsAuthenticated]);
+  
+  // Update ref when checkAuthUser changes
+  useEffect(() => {
+    checkAuthUserRef.current = checkAuthUser;
+  }, [checkAuthUser]);
+  
+  // Initialize auth state on mount
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+        if (isAuthenticated) {
+          await checkAuthUser();
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+      } finally {
+        setIsLoading(false);
+        setIsInitialized(true);
+      }
+    };
+
+    initializeAuth();
+  }, [checkAuthUser, setIsLoading, setIsInitialized]);
+
+  // Login function
+  const login = async (email: string, password: string): Promise<AuthCheckResult> => {
+    try {
+      setIsLoading(true);
+      const session = await signInAccount(email, password);
+      const result = await checkAuthUser();
+      return result;
+    } catch (error: any) {
+      const errorMessage = error.message || 'Failed to login';
+      setError({ message: errorMessage, code: error.code });
+      return { isAuthenticated: false, user: null, error: errorMessage };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Logout function
+  const logout = async (): Promise<void> => {
+    try {
+      await clearAuthState();
+      navigate('/login');
+    } catch (error) {
+      console.error('Error during logout:', error);
+      throw error;
+    }
+  };
+
+  // Context value
+  const value = useMemo(() => ({
+    user,
+    setUser,
+    isLoading,
+    isInitialized,
+    isAuthenticated,
+    error,
+    login,
+    checkAuthUser,
+    refreshUserData,
+    logout,
+    clearError: () => setError(null)
+  }), [
+    user,
+    isLoading,
+    isInitialized,
+    isAuthenticated,
+    error,
+    login,
+    checkAuthUser,
+    refreshUserData,
+    logout
+  ]);
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+};
+
+// Custom hook to use the auth context
+export const useAuth = () => {
+  const context = useContext(AuthContext);
+  if (context === undefined) {
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
+  return context;
+};
+
+export default AuthContext;

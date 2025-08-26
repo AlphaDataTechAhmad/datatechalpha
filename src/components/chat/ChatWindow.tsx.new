@@ -1,0 +1,165 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { X, Send, MessageSquare } from 'lucide-react';
+import { useChat } from '@/contexts/ChatContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { ChatMessage } from '@/types/chat.types';
+
+interface ChatWindowProps {
+  isOpen: boolean;
+  onClose: () => void;
+  receiverId?: string;
+}
+
+interface Conversation {
+  id: string;
+  name: string;
+  lastMessage?: string;
+  unreadCount?: number;
+}
+
+const ChatWindow: React.FC<ChatWindowProps> = ({ isOpen, onClose, receiverId }) => {
+  // Debug log for props
+  console.log('ChatWindow rendered with isOpen:', isOpen, 'receiverId:', receiverId);
+  
+  if (!isOpen) return null; // Don't render if not open
+  
+  // Add keyboard shortcut to close with Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        onClose();
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+  
+  const { 
+    messages = [], 
+    sendMessage, 
+    currentChat, 
+    setCurrentChat,
+    conversations = [] 
+  } = useChat();
+  
+  const { user } = useAuth();
+  const [message, setMessage] = useState('');
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll to bottom when messages change
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  // Set initial chat if receiverId is provided
+  useEffect(() => {
+    if (receiverId) {
+      setCurrentChat(receiverId);
+    }
+  }, [receiverId, setCurrentChat]);
+
+  // Get the current conversation's messages
+  const currentMessages = useMemo(() => {
+    if (!currentChat || !user?.$id) return [];
+    return messages.filter(
+      (msg: ChatMessage) => 
+        (msg.senderId === currentChat && msg.receiverId === user.$id) ||
+        (msg.receiverId === currentChat && msg.senderId === user.$id)
+    );
+  }, [messages, currentChat, user?.$id]);
+
+  // Get the current chat's name
+  const currentChatName = useMemo(() => {
+    if (!currentChat) return 'Chat';
+    const chat = conversations.find((c: any) => c.id === currentChat);
+    return chat?.name || 'Chat';
+  }, [conversations, currentChat]);
+
+  const handleSendMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!message.trim() || !currentChat || !user?.$id) return;
+    
+    try {
+      await sendMessage(message, currentChat, {
+        senderName: user.name || 'User'
+      });
+      setMessage('');
+    } catch (error) {
+      console.error('Failed to send message:', error);
+    }
+  };
+
+  return (
+    <div className="fixed bottom-4 right-4 w-80 h-[500px] bg-white dark:bg-dark-800 rounded-lg shadow-xl flex flex-col z-50 border border-gray-200 dark:border-gray-700 overflow-hidden">
+      {/* Header */}
+      <div className="bg-indigo-600 text-white p-3 flex justify-between items-center">
+        <div className="flex items-center space-x-2">
+          <MessageSquare className="h-5 w-5" />
+          <h3 className="font-medium">{currentChatName || 'Chat'}</h3>
+        </div>
+        <button
+          onClick={onClose}
+          className="text-white hover:bg-indigo-700 p-1 rounded-full transition-colors"
+          aria-label="Close chat"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
+
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-4 bg-gray-50 dark:bg-dark-700">
+        {currentMessages.length === 0 ? (
+          <div className="h-full flex items-center justify-center text-gray-500 dark:text-gray-400">
+            <p>No messages yet. Start a conversation!</p>
+          </div>
+        ) : (
+          currentMessages.map((msg: ChatMessage) => (
+            <div
+              key={msg.id}
+              className={`mb-4 flex ${
+                msg.senderId === user?.$id ? 'justify-end' : 'justify-start'
+              }`}
+            >
+              <div
+                className={`max-w-xs p-3 rounded-lg ${
+                  msg.senderId === user?.$id
+                    ? 'bg-indigo-500 text-white'
+                    : 'bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-white'
+                }`}
+              >
+                <p className="text-sm">{msg.content}</p>
+                <p className="text-xs opacity-70 mt-1">
+                  {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </p>
+              </div>
+            </div>
+          ))
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* Message input */}
+      <div className="p-3 border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-dark-800">
+        <form onSubmit={handleSendMessage} className="flex space-x-2">
+          <input
+            type="text"
+            value={message}
+            onChange={(e) => setMessage(e.target.value)}
+            placeholder="Type a message..."
+            className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 bg-white dark:bg-dark-700 text-gray-900 dark:text-white"
+          />
+          <button
+            type="submit"
+            disabled={!message.trim()}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Send className="h-5 w-5" />
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+export default ChatWindow;

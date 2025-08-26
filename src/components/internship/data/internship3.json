@@ -1,0 +1,27 @@
+{
+  "id": "internship3",
+  "title": "Mobile App Development Internship",
+  "description": "Test your mobile development skills",
+  "questions": [
+    {
+      "id": 1,
+      "question": "What are the key differences between React Native and Flutter?",
+      "type": "text",
+      "points": 5
+    },
+    {
+      "id": 2,
+      "question": "Explain the React Native component lifecycle.",
+      "type": "text",
+      "points": 5
+    },
+    {
+      "id": 3,
+      "question": "How do you handle state management in a React Native application?",
+      "type": "text",
+      "points": 10
+    }
+  ],
+  "durationMinutes": 30,
+  "passingScore": 12
+}

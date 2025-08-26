@@ -1,0 +1,537 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { 
+  Card, 
+  Form, 
+  message, 
+  Upload, 
+  Button, 
+  Input, 
+  InputNumber, 
+  Select, 
+  Space, 
+  Typography,
+  Spin
+} from 'antd';
+import { 
+  UploadOutlined, 
+  PlusOutlined, 
+  DeleteOutlined,
+  SaveOutlined
+} from '@ant-design/icons';
+import * as pdfjsLib from 'pdfjs-dist';
+import { v4 as uuidv4 } from 'uuid';
+import { useAuth } from '../../../contexts/AuthContext';
+import { createTest, updateTest, getTest } from '../../../services/testService';
+
+// Set PDF.js worker path
+if (typeof window !== 'undefined') {
+  // @ts-ignore - pdfjsLib types don't include the worker property
+  window.pdfjsWorker = pdfjsLib;
+  pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+}
+
+const { Option } = Select;
+const { Title } = Typography;
+
+interface OptionType {
+  id: string;
+  text: string;
+  hindiText: string;
+}
+
+interface QuestionType {
+  id: string;
+  text: string;
+  type: string;
+  points: number;
+  options: OptionType[];
+  correctAnswer: number;
+  explanation: string;
+}
+
+interface TestFormValues {
+  title: string;
+  description: string;
+  duration: number;
+  passingScore: number;
+  category: string;
+  instructions: string[];
+  questions: QuestionType[];
+}
+
+const TEST_CATEGORIES = [
+  'General Knowledge',
+  'Mathematics',
+  'Science',
+  'History',
+  'Geography',
+  'Current Affairs'
+];
+
+const TestForm: React.FC = () => {
+  const [form] = Form.useForm<TestFormValues>();
+  const [loading, setLoading] = useState<boolean>(false);
+  const [isProcessingPdf, setIsProcessingPdf] = useState<boolean>(false);
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { id: testId } = useParams<{ id: string }>();
+  const isEditing = !!testId;
+
+  // Load test data if in edit mode
+  useEffect(() => {
+    if (isEditing && testId) {
+      const loadTest = async () => {
+        try {
+          setLoading(true);
+          const test = await getTest(testId);
+          if (test) {
+            form.setFieldsValue({
+              ...test,
+              questions: test.questions || []
+            });
+          }
+        } catch (error) {
+          console.error('Error loading test:', error);
+          message.error('Failed to load test data');
+        } finally {
+          setLoading(false);
+        }
+      };
+      loadTest();
+    }
+  }, [isEditing, testId, form]);
+
+  // Extract text from PDF file
+  const extractTextFromPdf = async (file: File): Promise<string> => {
+    try {
+      const arrayBuffer = await file.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+      let fullText = '';
+      
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const strings = textContent.items.map(item => (item as any).str);
+        fullText += strings.join(' ') + '\n';
+      }
+      
+      return fullText;
+    } catch (error) {
+      console.error('Error extracting text from PDF:', error);
+      throw new Error('Failed to extract text from PDF');
+    }
+  };
+
+  // Parse questions from extracted text
+  const parseQuestionsFromText = (text: string): QuestionType[] => {
+    const questions: QuestionType[] = [];
+    
+    // Pattern 1: Questions starting with numbers (1., 2., etc.)
+    const questionRegex = /(\d+[.)]\s*[^\n]+)([\s\S]+?)(?=\n\s*\d+[.)]|$)/g;
+    const optionRegex = /^\s*([a-d])\)\s*(.+)$/im;
+    
+    let match;
+    while ((match = questionRegex.exec(text)) !== null) {
+      const questionText = match[1].trim();
+      const optionsText = match[2].trim();
+      const options: OptionType[] = [];
+      
+      // Extract options (a, b, c, d)
+      const optionLines = optionsText.split('\n');
+      for (const line of optionLines) {
+        const optionMatch = line.match(optionRegex);
+        if (optionMatch) {
+          options.push({
+            id: uuidv4(),
+            text: optionMatch[2].trim(),
+            hindiText: ''
+          });
+        }
+      }
+      
+      if (questionText && options.length >= 2) {
+        questions.push({
+          id: uuidv4(),
+          text: questionText,
+          type: 'multiple-choice',
+          points: 1,
+          options,
+          correctAnswer: 0,
+          explanation: ''
+        });
+      }
+    }
+    
+    return questions;
+  };
+
+  // Handle PDF file upload
+  const handlePdfUpload = async (file: File) => {
+    try {
+      setIsProcessingPdf(true);
+      message.loading('Processing PDF...', 0);
+      
+      // Extract text from PDF
+      const text = await extractTextFromPdf(file);
+      
+      // Parse questions from text
+      const questions = parseQuestionsFromText(text);
+      
+      if (questions.length > 0) {
+        // Get current questions from form
+        const currentQuestions = form.getFieldValue('questions') || [];
+        const updatedQuestions = [...currentQuestions, ...questions];
+        
+        // Update form with parsed questions
+        form.setFieldsValue({ questions: updatedQuestions });
+        message.success(`Successfully parsed ${questions.length} questions from PDF`);
+      } else {
+        message.warning('No questions found in the PDF');
+      }
+      
+      return false; // Prevent default upload
+    } catch (error) {
+      console.error('Error processing PDF:', error);
+      message.error('Failed to process PDF. Please try again.');
+      return false;
+    } finally {
+      message.destroy();
+      setIsProcessingPdf(false);
+    }
+  };
+
+  // Handle form submission
+  const handleSubmit = async (values: TestFormValues) => {
+    if (!user) {
+      message.error('You must be logged in to save tests');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      const testData = {
+        ...values,
+        userId: user.$id,
+        questions: values.questions.map(q => ({
+          ...q,
+          options: q.options.map(opt => ({
+            ...opt,
+            id: opt.id || uuidv4()
+          }))
+        }))
+      };
+
+      if (isEditing && testId) {
+        await updateTest(testId, testData, user.$id);
+        message.success('Test updated successfully');
+      } else {
+        await createTest(testData, user.$id);
+        message.success('Test created successfully');
+      }
+      
+      navigate('/admin/tests');
+    } catch (error) {
+      console.error('Error saving test:', error);
+      message.error('Failed to save test. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Upload props for Ant Design Upload component
+  const uploadProps = {
+    beforeUpload: (file: File) => {
+      if (file.type !== 'application/pdf') {
+        message.error('You can only upload PDF files!');
+        return Upload.LIST_IGNORE;
+      }
+      setPdfFile(file);
+      handlePdfUpload(file);
+      return false; // Prevent default upload
+    },
+    showUploadList: false,
+    accept: '.pdf',
+  };
+
+  // Add a new question
+  const addQuestion = () => {
+    const questions = form.getFieldValue('questions') || [];
+    form.setFieldsValue({
+      questions: [
+        ...questions,
+        {
+          id: uuidv4(),
+          text: '',
+          type: 'multiple-choice',
+          points: 1,
+          options: [
+            { id: uuidv4(), text: '', hindiText: '' },
+            { id: uuidv4(), text: '', hindiText: '' }
+          ],
+          correctAnswer: 0,
+          explanation: ''
+        }
+      ]
+    });
+  };
+
+  // Add an option to a question
+  const addOption = (questionIndex: number) => {
+    const questions = [...(form.getFieldValue('questions') || [])];
+    questions[questionIndex].options.push({
+      id: uuidv4(),
+      text: '',
+      hindiText: ''
+    });
+    form.setFieldsValue({ questions });
+  };
+
+  // Remove an option from a question
+  const removeOption = (questionIndex: number, optionIndex: number) => {
+    const questions = [...(form.getFieldValue('questions') || [])];
+    questions[questionIndex].options.splice(optionIndex, 1);
+    form.setFieldsValue({ questions });
+  };
+
+  // Remove a question
+  const removeQuestion = (index: number) => {
+    const questions = [...(form.getFieldValue('questions') || [])];
+    questions.splice(index, 1);
+    form.setFieldsValue({ questions });
+  };
+
+  return (
+    <div style={{ maxWidth: '1200px', margin: '0 auto', padding: '24px' }}>
+      <Title level={2} style={{ marginBottom: '24px' }}>
+        {isEditing ? 'Edit Test' : 'Create New Test'}
+      </Title>
+      
+      <Form
+        form={form}
+        layout="vertical"
+        onFinish={handleSubmit}
+        initialValues={{
+          title: '',
+          description: '',
+          duration: 60,
+          passingScore: 60,
+          category: '',
+          instructions: [],
+          questions: []
+        }}
+      >
+        <Card title="Test Details" style={{ marginBottom: '24px' }}>
+          <Form.Item
+            label="Test Title"
+            name="title"
+            rules={[{ required: true, message: 'Please enter a test title' }]}
+          >
+            <Input placeholder="Enter test title" />
+          </Form.Item>
+          
+          <Form.Item
+            label="Description"
+            name="description"
+          >
+            <Input.TextArea rows={3} placeholder="Enter test description" />
+          </Form.Item>
+          
+          <Space size="large">
+            <Form.Item
+              label="Duration (minutes)"
+              name="duration"
+              rules={[{ required: true, message: 'Please enter test duration' }]}
+            >
+              <InputNumber min={1} />
+            </Form.Item>
+            
+            <Form.Item
+              label="Passing Score (%)"
+              name="passingScore"
+              rules={[{ required: true, message: 'Please enter passing score' }]}
+            >
+              <InputNumber min={1} max={100} />
+            </Form.Item>
+            
+            <Form.Item
+              label="Category"
+              name="category"
+              rules={[{ required: true, message: 'Please select a category' }]}
+            >
+              <Select style={{ width: '200px' }} placeholder="Select category">
+                {TEST_CATEGORIES.map(category => (
+                  <Option key={category} value={category.toLowerCase().replace(/\s+/g, '-')}>
+                    {category}
+                  </Option>
+                ))}
+              </Select>
+            </Form.Item>
+          </Space>
+          
+          <Form.Item
+            label="Upload Questions from PDF"
+            extra="Upload a PDF containing questions and answers to automatically parse them"
+          >
+            <Upload.Dragger {...uploadProps}>
+              <p className="ant-upload-drag-icon">
+                <UploadOutlined />
+              </p>
+              <p className="ant-upload-text">
+                Click or drag PDF to this area to upload
+              </p>
+              <p className="ant-upload-hint">
+                {isProcessingPdf ? 'Processing...' : 'Support for a single PDF file'}
+              </p>
+            </Upload.Dragger>
+          </Form.Item>
+        </Card>
+
+        <Card 
+          title="Questions" 
+          style={{ marginBottom: '24px' }}
+          extra={
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              onClick={addQuestion}
+            >
+              Add Question
+            </Button>
+          }
+        >
+          <Form.List name="questions">
+            {(fields, { add, remove }) => (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+                {fields.map(({ key, name, ...restField }) => (
+                  <Card 
+                    key={key} 
+                    type="inner" 
+                    title={`Question ${name + 1}`}
+                    extra={
+                      <Button 
+                        type="text" 
+                        danger 
+                        icon={<DeleteOutlined />} 
+                        onClick={() => remove(name)}
+                      />
+                    }
+                  >
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'text']}
+                      label="Question Text"
+                      rules={[{ required: true, message: 'Question text is required' }]}
+                    >
+                      <Input.TextArea rows={2} placeholder="Enter question text" />
+                    </Form.Item>
+                    
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'points']}
+                      label="Points"
+                      initialValue={1}
+                    >
+                      <InputNumber min={1} />
+                    </Form.Item>
+                    
+                    <Form.Item
+                      label="Options"
+                      required
+                    >
+                      <Form.List name={[name, 'options']}>
+                        {(optionFields, { add: addOption, remove: removeOption }) => (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                            {optionFields.map(({ key: optionKey, name: optionName, ...optionRestField }) => (
+                              <Space key={optionKey} style={{ display: 'flex', marginBottom: 8 }} align="baseline">
+                                <Form.Item
+                                  {...optionRestField}
+                                  name={[optionName, 'text']}
+                                  rules={[{ required: true, message: 'Option text is required' }]}
+                                  style={{ marginBottom: 0, flex: 1 }}
+                                >
+                                  <Input placeholder={`Option ${optionName + 1}`} />
+                                </Form.Item>
+                                <Button 
+                                  type="text" 
+                                  danger 
+                                  icon={<DeleteOutlined />} 
+                                  onClick={() => removeOption(optionName)}
+                                />
+                              </Space>
+                            ))}
+                            <Button 
+                              type="dashed" 
+                              onClick={() => addOption()} 
+                              block 
+                              icon={<PlusOutlined />}
+                            >
+                              Add Option
+                            </Button>
+                          </div>
+                        )}
+                      </Form.List>
+                    </Form.Item>
+                    
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'correctAnswer']}
+                      label="Correct Answer"
+                      rules={[{ required: true, message: 'Please select the correct answer' }]}
+                    >
+                      <Select placeholder="Select correct answer">
+                        {form.getFieldValue('questions')?.[name]?.options?.map((_: any, index: number) => (
+                          <Option key={index} value={index}>
+                            Option {index + 1}
+                          </Option>
+                        ))}
+                      </Select>
+                    </Form.Item>
+                    
+                    <Form.Item
+                      {...restField}
+                      name={[name, 'explanation']}
+                      label="Explanation"
+                    >
+                      <Input.TextArea rows={2} placeholder="Enter explanation (optional)" />
+                    </Form.Item>
+                  </Card>
+                ))}
+                
+                {fields.length === 0 && (
+                  <div style={{ textAlign: 'center', padding: '24px', border: '1px dashed #d9d9d9', borderRadius: '2px' }}>
+                    <p>No questions added yet. Add a question or upload a PDF to get started.</p>
+                    <Button 
+                      type="primary" 
+                      icon={<PlusOutlined />} 
+                      onClick={() => add()}
+                      style={{ marginTop: '16px' }}
+                    >
+                      Add First Question
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+          </Form.List>
+        </Card>
+        
+        <div style={{ textAlign: 'right', marginTop: '24px' }}>
+          <Button 
+            type="primary" 
+            htmlType="submit" 
+            icon={<SaveOutlined />} 
+            loading={loading}
+            size="large"
+          >
+            {isEditing ? 'Update Test' : 'Create Test'}
+          </Button>
+        </div>
+      </Form>
+    </div>
+  );
+};
+
+export default TestForm;

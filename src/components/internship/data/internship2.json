@@ -1,0 +1,27 @@
+{
+  "id": "internship2",
+  "title": "Data Science Internship",
+  "description": "Test your data science knowledge",
+  "questions": [
+    {
+      "id": 1,
+      "question": "Explain the difference between supervised and unsupervised learning.",
+      "type": "text",
+      "points": 5
+    },
+    {
+      "id": 2,
+      "question": "What is cross-validation and why is it important?",
+      "type": "text",
+      "points": 5
+    },
+    {
+      "id": 3,
+      "question": "Explain the bias-variance tradeoff.",
+      "type": "text",
+      "points": 10
+    }
+  ],
+  "durationMinutes": 30,
+  "passingScore": 12
+}

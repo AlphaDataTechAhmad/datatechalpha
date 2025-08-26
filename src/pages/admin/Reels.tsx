@@ -1,0 +1,606 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Trash2, X, Check, Upload, Image as ImageIcon, Video as VideoIcon, Loader2 } from 'lucide-react';
+import { Reel, getReels, createReel, deleteReel, toggleReelStatus } from '@/Services/reelService';
+import { useAuth } from '@/contexts/AuthContext';
+import { motion, AnimatePresence } from 'framer-motion';
+
+interface ReelFormState {
+  title: string;
+  description: string;
+  videoFile: File | null;
+  videoId: string;
+  thumbnailFile: File | null;
+  isActive: boolean;
+}
+
+const ReelsAdmin: React.FC = () => {
+  const [reels, setReels] = useState<Reel[]>([]);
+  const [allReels, setAllReels] = useState<Reel[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [showUploadModal, setShowUploadModal] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [dragActive, setDragActive] = useState(false);
+  const [thumbnailPreview, setThumbnailPreview] = useState<string | null>(null);
+  const [showActiveOnly, setShowActiveOnly] = useState(true);
+  
+  const [newReel, setNewReel] = useState<ReelFormState>({
+    title: '',
+    description: '',
+    videoFile: null,
+    videoId: `reel-${Date.now()}`,
+    thumbnailFile: null,
+    isActive: true
+  });
+  
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const thumbnailInputRef = useRef<HTMLInputElement>(null);
+  const { user } = useAuth();
+  const navigate = useNavigate();
+
+  // Redirect if not admin or subadmin
+  useEffect(() => {
+    if (user?.role !== 'admin' && user?.role !== 'subadmin') {
+      navigate('/');
+    }
+  }, [user, navigate]);
+
+  // Fetch reels
+  useEffect(() => {
+    const fetchReels = async () => {
+      try {
+        const isAdmin = user?.role === 'admin';
+        const response = await getReels(isAdmin);
+        setAllReels(response);
+        // Filter reels based on showActiveOnly state
+        const filteredReels = showActiveOnly 
+          ? response.filter(reel => reel.isActive) 
+          : response;
+        setReels(filteredReels);
+      } catch (err) {
+        setError('Failed to load reels. Please try again.');
+        console.error('Error fetching reels:', err);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchReels();
+  }, [user?.role, showActiveOnly]);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, type: 'video' | 'thumbnail') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (type === 'video') {
+      if (!file.type.startsWith('video/')) {
+        setUploadError('Please upload a valid video file');
+        return;
+      }
+      if (file.size > 50 * 1024 * 1024) { // 50MB
+        setUploadError('Video file size should be less than 50MB');
+        return;
+      }
+      setNewReel(prev => ({...prev, videoFile: file}));
+    } else {
+      if (!file.type.startsWith('image/')) {
+        setUploadError('Please upload a valid image file for thumbnail');
+        return;
+      }
+      if (file.size > 5 * 1024 * 1024) { // 5MB
+        setUploadError('Thumbnail size should be less than 5MB');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setThumbnailPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+      
+      setNewReel(prev => ({...prev, thumbnailFile: file}));
+    }
+    
+    if (uploadError) setUploadError(null);
+  };
+
+  const handleDrag = (e: React.DragEvent, type: 'video' | 'thumbnail') => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (e.type === 'dragenter' || e.type === 'dragover') {
+      setDragActive(true);
+    } else if (e.type === 'dragleave') {
+      setDragActive(false);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent, type: 'video' | 'thumbnail') => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragActive(false);
+    
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      const event = {
+        target: { files: [file] }
+      } as unknown as React.ChangeEvent<HTMLInputElement>;
+      handleFileChange(event, type);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!newReel.title || !newReel.videoFile) {
+      setUploadError('Please fill in all required fields');
+      return;
+    }
+
+    setIsUploading(true);
+    setUploadError(null);
+
+    try {
+      const formData = new FormData();
+      formData.append('title', newReel.title.trim());
+      formData.append('description', newReel.description.trim());
+      formData.append('video', newReel.videoFile);
+      formData.append('isActive', String(newReel.isActive));
+      
+      if (newReel.thumbnailFile) {
+        formData.append('thumbnail', newReel.thumbnailFile);
+      }
+
+      console.log('Creating new reel with form data:', {
+        title: newReel.title.trim(),
+        hasVideoFile: !!newReel.videoFile,
+        hasThumbnail: !!newReel.thumbnailFile,
+        isActive: newReel.isActive
+      });
+
+      const createdReel = await createReel(formData);
+      console.log('Successfully created reel:', createdReel);
+      
+      // Update the UI with the new reel
+      setReels(prevReels => [createdReel, ...prevReels]);
+      setShowUploadModal(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error uploading reel:', error);
+      setUploadError(error instanceof Error ? error.message : 'Failed to upload reel. Please try again.');
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (window.confirm('Are you sure you want to delete this reel?')) {
+      try {
+        await deleteReel(id);
+        setReels(reels.filter(reel => reel._id !== id));
+      } catch (error) {
+        console.error('Error deleting reel:', error);
+        alert('Failed to delete reel. Please try again.');
+      }
+    }
+  };
+
+  const handleStatusToggle = async (id: string, currentStatus: boolean) => {
+    try {
+      console.log(`Toggling status for reel ${id} from ${currentStatus} to ${!currentStatus}`);
+      const updatedReel = await toggleReelStatus(id, !currentStatus);
+      console.log('Updated reel from API:', updatedReel);
+      
+      // Update allReels first
+      const updatedAllReels = allReels.map(reel => 
+        reel._id === id ? { ...reel, isActive: updatedReel.isActive } : reel
+      );
+      
+      setAllReels(updatedAllReels);
+      
+      // Then filter based on showActiveOnly
+      const filteredReels = showActiveOnly 
+        ? updatedAllReels.filter(reel => reel.isActive)
+        : updatedAllReels;
+        
+      setReels(filteredReels);
+    } catch (error) {
+      console.error('Error updating reel status:', error);
+      alert('Failed to update reel status. Please try again.');
+    }
+  };
+
+  const resetForm = () => {
+    setNewReel({
+      title: '',
+      description: '',
+      videoFile: null,
+      videoId: `reel-${Date.now()}`,
+      thumbnailFile: null,
+      isActive: true
+    });
+    setThumbnailPreview(null);
+    setUploadError(null);
+    
+    if (fileInputRef.current) fileInputRef.current.value = '';
+    if (thumbnailInputRef.current) thumbnailInputRef.current.value = '';
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Manage Reels</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Upload and manage your video reels
+          </p>
+        </div>
+        <button
+          onClick={() => setShowUploadModal(true)}
+          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+        >
+          <Upload className="h-4 w-4 mr-2" />
+          <span>Upload New Reel</span>
+        </button>
+      </div>
+
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <X className="h-5 w-5 text-red-500" />
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-red-700">{error}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center mb-6">
+        <h2 className="text-lg font-medium text-gray-900 dark:text-white">
+          {showActiveOnly ? 'Active Reels' : 'All Reels'}
+        </h2>
+        <div className="flex items-center">
+          <span className="text-sm text-gray-600 dark:text-gray-300 mr-2">
+            Show:
+          </span>
+          <div className="flex bg-gray-100 dark:bg-dark-700 rounded-lg p-1">
+            <button
+              onClick={() => setShowActiveOnly(true)}
+              className={`px-3 py-1 text-sm rounded-md ${
+                showActiveOnly 
+                  ? 'bg-white dark:bg-dark-600 shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400'
+              }`}
+            >
+              Active
+            </button>
+            <button
+              onClick={() => setShowActiveOnly(false)}
+              className={`px-3 py-1 text-sm rounded-md ${
+                !showActiveOnly 
+                  ? 'bg-white dark:bg-dark-600 shadow-sm' 
+                  : 'text-gray-600 dark:text-gray-400'
+              }`}
+            >
+              All
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {reels.length === 0 ? (
+        <div className="text-center py-16 border-2 border-dashed border-gray-300 dark:border-dark-600 rounded-lg">
+          <div className="max-w-md mx-auto">
+            <VideoIcon className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-1">No reels yet</h3>
+            <p className="text-gray-500 dark:text-gray-400 mb-4">Upload your first reel to get started</p>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              <span>Upload Reel</span>
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {reels.map((reel) => (
+            <motion.div 
+              key={reel._id} 
+              className="bg-white dark:bg-dark-800 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="relative aspect-video bg-black">
+                {reel.thumbnailUrl ? (
+                  <img
+                    src={reel.thumbnailUrl}
+                    alt={reel.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-gray-100 dark:bg-dark-700">
+                    <span className="text-gray-400">No thumbnail</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 flex items-center justify-center gap-3 opacity-0 hover:opacity-100 transition-opacity bg-black/50">
+                  <button
+                    onClick={() => handleStatusToggle(reel._id, reel.isActive)}
+                    className={`p-2 rounded-full ${
+                      reel.isActive 
+                        ? 'bg-yellow-500 hover:bg-yellow-600' 
+                        : 'bg-green-500 hover:bg-green-600'
+                    } text-white transition-colors`}
+                    aria-label={reel.isActive ? 'Deactivate reel' : 'Activate reel'}
+                    title={reel.isActive ? 'Deactivate' : 'Activate'}
+                  >
+                    {reel.isActive ? (
+                      <X size={18} />
+                    ) : (
+                      <Check size={18} />
+                    )}
+                  </button>
+                  <button
+                    onClick={() => handleDelete(reel._id)}
+                    className="p-2 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors"
+                    aria-label="Delete reel"
+                    title="Delete"
+                  >
+                    <Trash2 size={18} />
+                  </button>
+                </div>
+                {!reel.isActive && (
+                  <div className="absolute top-2 right-2 bg-gray-800 text-white text-xs px-2 py-1 rounded">
+                    Inactive
+                  </div>
+                )}
+              </div>
+              <div className="p-4">
+                <div className="flex justify-between items-start mb-1">
+                  <h3 className="font-medium text-gray-900 dark:text-white">{reel.title}</h3>
+                  <span className="text-xs text-gray-500 dark:text-gray-400">
+                    {new Date(reel.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                {reel.description && (
+                  <p className="text-sm text-gray-600 dark:text-gray-300 line-clamp-2">
+                    {reel.description}
+                  </p>
+                )}
+              </div>
+            </motion.div>
+          ))}
+        </div>
+      )}
+
+      {/* Upload Modal */}
+      <AnimatePresence>
+        {showUploadModal && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <motion.div 
+              key="upload-modal"
+              className="bg-white dark:bg-dark-800 rounded-lg w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+            >
+              <div className="p-6">
+                <div className="flex justify-between items-center mb-4">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">Upload New Reel</h2>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                      Share your video content with your audience
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      setShowUploadModal(false);
+                      resetForm();
+                    }}
+                    className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300 transition-colors p-1"
+                    aria-label="Close"
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Title <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={newReel.title}
+                      onChange={(e) => setNewReel(prev => ({...prev, title: e.target.value}))}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-dark-700 dark:text-white"
+                      placeholder="Enter reel title"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Description
+                    </label>
+                    <textarea
+                      value={newReel.description}
+                      onChange={(e) => setNewReel(prev => ({...prev, description: e.target.value}))}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-dark-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent dark:bg-dark-700 dark:text-white"
+                      placeholder="Add a description (optional)"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Video File <span className="text-red-500">*</span>
+                    </label>
+                    <div 
+                      className={`mt-1 flex flex-col items-center justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg transition-colors ${
+                        dragActive 
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' 
+                          : 'border-gray-300 dark:border-dark-600 hover:border-gray-400 dark:hover:border-dark-500'
+                      }`}
+                      onDragEnter={(e) => handleDrag(e, 'video')}
+                      onDragLeave={(e) => handleDrag(e, 'video')}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragActive(true);
+                      }}
+                      onDrop={(e) => handleDrop(e, 'video')}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <VideoIcon className="h-10 w-10 text-gray-400 mb-3" />
+                      <div className="text-sm text-center">
+                        <p className="font-medium text-gray-700 dark:text-gray-300">
+                          {newReel.videoFile ? newReel.videoFile.name : 'Drag and drop your video, or click to select'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          MP4, WebM or MOV (max. 50MB)
+                        </p>
+                      </div>
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="video/*"
+                        className="sr-only"
+                        onChange={(e) => handleFileChange(e, 'video')}
+                        required={!newReel.videoFile}
+                      />
+                    </div>
+                    {newReel.videoFile && (
+                      <div className="text-xs text-green-600 dark:text-green-400 mt-1 flex items-center">
+                        <Check className="h-3 w-3 mr-1" />
+                        Video selected: {newReel.videoFile.name} ({(newReel.videoFile.size / (1024 * 1024)).toFixed(2)}MB)
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Thumbnail Image (Optional)
+                    </label>
+                    <div 
+                      className={`mt-1 flex flex-col items-center justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-lg transition-colors ${
+                        dragActive 
+                          ? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20' 
+                          : 'border-gray-300 dark:border-dark-600 hover:border-gray-400 dark:hover:border-dark-500'
+                      }`}
+                      onDragEnter={(e) => handleDrag(e, 'thumbnail')}
+                      onDragLeave={(e) => handleDrag(e, 'thumbnail')}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragActive(true);
+                      }}
+                      onDrop={(e) => handleDrop(e, 'thumbnail')}
+                      onClick={() => thumbnailInputRef.current?.click()}
+                    >
+                      <ImageIcon className="h-10 w-10 text-gray-400 mb-3" />
+                      <div className="text-sm text-center">
+                        <p className="font-medium text-gray-700 dark:text-gray-300">
+                          {newReel.thumbnailFile ? 'Change thumbnail' : 'Drag and drop a thumbnail, or click to select'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          JPG, PNG (max. 5MB, 16:9 recommended)
+                        </p>
+                      </div>
+                      <input
+                        ref={thumbnailInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="sr-only"
+                        onChange={(e) => handleFileChange(e, 'thumbnail')}
+                      />
+                    </div>
+                    {thumbnailPreview && (
+                      <div className="mt-2">
+                        <p className="text-xs text-gray-500 dark:text-gray-400 mb-1">Thumbnail Preview:</p>
+                        <img 
+                          src={thumbnailPreview} 
+                          alt="Thumbnail preview" 
+                          className="h-20 w-auto rounded border border-gray-200 dark:border-dark-600"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="isActive"
+                      checked={newReel.isActive}
+                      onChange={(e) => setNewReel(prev => ({...prev, isActive: e.target.checked}))}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 dark:border-dark-600 rounded dark:bg-dark-700"
+                    />
+                    <label htmlFor="isActive" className="ml-2 block text-sm text-gray-700 dark:text-gray-300">
+                      Make this reel visible to users
+                    </label>
+                  </div>
+
+                  {uploadError && (
+                    <div className="bg-red-50 border-l-4 border-red-500 p-4">
+                      <div className="flex">
+                        <div className="flex-shrink-0">
+                          <X className="h-5 w-5 text-red-500" />
+                        </div>
+                        <div className="ml-3">
+                          <p className="text-sm text-red-700">{uploadError}</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-dark-700">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowUploadModal(false);
+                        resetForm();
+                      }}
+                      className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 dark:bg-dark-700 dark:border-dark-600 dark:text-gray-200 dark:hover:bg-dark-600"
+                      disabled={isUploading}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={isUploading}
+                    >
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        'Upload Reel'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+export default ReelsAdmin;

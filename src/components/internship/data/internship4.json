@@ -1,0 +1,27 @@
+{
+  "id": "internship4",
+  "title": "UI/UX Design Internship",
+  "description": "Test your UI/UX design knowledge",
+  "questions": [
+    {
+      "id": 1,
+      "question": "What is the difference between UI and UX design?",
+      "type": "text",
+      "points": 5
+    },
+    {
+      "id": 2,
+      "question": "Explain the importance of wireframing in the design process.",
+      "type": "text",
+      "points": 5
+    },
+    {
+      "id": 3,
+      "question": "What are some key principles of good user interface design?",
+      "type": "text",
+      "points": 10
+    }
+  ],
+  "durationMinutes": 30,
+  "passingScore": 12
+}

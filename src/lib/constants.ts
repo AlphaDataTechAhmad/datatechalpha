@@ -1,0 +1,4 @@
+export const DATABASE_ID = '68261b6a002ba6c3b584';
+export const PROFILE_COLLECTION = 'profiles';
+export const CHAT_MESSAGES_COLLECTION = '68554d8d0014e7c5c239';
+export const NOTIFICATIONS_COLLECTION = '6853e351000f87a36c80';

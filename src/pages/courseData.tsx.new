@@ -1,0 +1,141 @@
+import { ReactNode } from 'react';
+import logo from '../Images/1.jpg';
+
+export interface VideoLecture {
+  id: string;
+  title: string;
+  youtubeId: string;
+  description: string;
+  duration?: string;
+}
+
+export interface Teacher {
+  id: string;
+  name: string;
+  email: string;
+  bio: string;
+  image: string;
+}
+
+export interface LiveLecture {
+  id: string;
+  title: string;
+  description: string;
+  scheduledTime: string;
+  duration: string;
+  meetingLink?: string;
+  status: 'scheduled' | 'live' | 'completed';
+  teacherId: string;
+}
+
+export interface StudyMaterial {
+  id: string;
+  title: string;
+  description: string;
+  fileUrl: string;
+  fileType: 'pdf' | 'doc' | 'ppt' | 'video' | 'other';
+  uploadDate: string;
+  teacherId: string;
+}
+
+export interface Course {
+  id: string;
+  $id?: string;  // For compatibility with Appwrite
+  courseId?: string;  // Alias for id for backward compatibility
+  title: string;
+  description: string;
+  duration: string;
+  students: string;
+  successRate: string;
+  level: string;
+  image: string;
+  price?: number;
+  category?: string;
+  originalPrice?: number;
+  syllabus: string[];
+  features: string[];
+  rating?: ReactNode;
+  videoLectures?: VideoLecture[];
+  overview?: string;
+  teacherId?: string;
+  liveLectures?: LiveLecture[];
+  studyMaterials?: StudyMaterial[];
+  testIds?: string[]; // Array of test IDs associated with this course
+}
+
+export interface CourseCategory {
+  category: string;
+  courses: Course[];
+}
+
+export const networkingCourses: Course[] = [
+  {
+    id: '6866ec1a002ad3caece9',
+    title: 'Computer Networking Fundamentals',
+    description: 'Understand the basics of computer networks, protocols, and communication models',
+    overview: 'This comprehensive course covers the fundamentals of computer networking. You\'ll learn about network architectures, protocols, and the OSI model. The course includes hands-on exercises to help you understand how data is transmitted across networks and how different network devices interact with each other.',
+    duration: '6 Weeks',
+    students: '25,000+',
+    successRate: '93%',
+    price: 799,
+    testIds: ['686548b2000e1cb9a935'],
+    level: 'Beginner',
+    image: 'https://i.postimg.cc/VkGNHHB0/Chat-GPT-Image-Jul-4-2025-02-56-07-PM.png',
+    syllabus: [
+      'Introduction to Networking',
+      'OSI & TCP/IP Models',
+      'IP Addressing & Subnetting',
+      'Network Devices & Protocols'
+    ],
+    features: [
+      'Interactive Diagrams',
+      'Real-world Scenarios',
+      'Quizzes',
+      'Certificate of Completion'
+    ],
+    videoLectures: [
+      {
+        id: 'networking-intro',
+        title: 'What is Computer Networking?',
+        youtubeId: 'qiQR5rTSshw',
+        description: 'An introduction to networks, types, and basic concepts',
+        duration: '16:10'
+      },
+      {
+        id: 'osi-model',
+        title: 'The OSI Model Explained',
+        youtubeId: 'vv4y_uOneC0',
+        description: 'Understand the 7 layers of the OSI model and how they work',
+        duration: '20:34'
+      }
+    ]
+  }
+];
+
+// Combine all course arrays into categories
+export const allCourses: CourseCategory[] = [
+  {
+    category: 'SSC',
+    courses: sscCourses
+  },
+  {
+    category: 'Aptitude',
+    courses: aptitudeCourses
+  },
+  {
+    category: 'SQL',
+    courses: sqlCourses
+  },
+  {
+    category: 'Python',
+    courses: pythonCourses
+  },
+  {
+    category: 'Banking',
+    courses: bankingCourses
+  },
+  {
+    category: 'Networking',
+    courses: networkingCourses
+  }
+];

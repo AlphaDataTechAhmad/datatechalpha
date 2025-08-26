@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DATA-TECH | Learn Future</title>
+    <meta name="description" content="DATA-TECH - The future of learning with cutting-edge courses in technology, data science, and AI." />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src='https://meet.jit.si/external_api.js'></script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Polyfills for process and Buffer -->
+    <script>
+      // Create a global process object if it doesn't exist
+      window.process = window.process || {
+        env: { NODE_ENV: 'development' },
+        browser: true,
+        version: '',
+        versions: { node: '' },
+        platform: 'browser',
+        nextTick: (fn) => setTimeout(fn, 0)
+      };
+      
+      // Create a global Buffer object if it doesn't exist
+      if (typeof window.Buffer === 'undefined') {
+        window.Buffer = {
+          isBuffer: () => false,
+          from: () => ({}),
+          alloc: () => ({}),
+          allocUnsafe: () => ({}),
+          allocUnsafeSlow: () => ({}),
+          byteLength: () => 0,
+          compare: () => 0,
+          concat: () => ({}),
+          copy: () => 0,
+          equals: () => false,
+          fill: () => ({}),
+          includes: () => false,
+          indexOf: () => -1,
+          isEncoding: () => false,
+          lastIndexOf: () => -1,
+          of: () => ({}),
+          poolSize: 0,
+          toBuffer: () => ({}),
+          toString: () => ''
+        };
+      }
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

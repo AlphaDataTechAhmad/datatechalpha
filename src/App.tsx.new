@@ -1,0 +1,195 @@
+import React, { useEffect } from 'react';
+import { Routes, Route } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from './Services/realtimeUpdates';
+import { AnimatePresence } from 'framer-motion';
+import { GeminiProvider } from './contexts/GeminiContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
+import { CourseProvider } from './contexts/CourseContext';
+import { ChatProvider } from './contexts/ChatContext';
+
+// Layouts
+import Layout from './components/layout/Layout';
+
+// Pages
+import HomePage from './pages/HomePage';
+import CoursesPage from './pages/CoursesPage';
+import CourseDetailPage from './pages/CourseDetailPage';
+import AboutPage from './pages/AboutPage';
+import LoginPage from './pages/Login';
+import VerifyEmail from './pages/VerifyEmail';
+import { account } from './Services/appwrite';
+import { setAccountService } from './utils/subAdminUtils';
+import SignupPage from './pages/Signup';
+import VerifyNotice from './pages/VerifyNotice';
+import ProfilePage from './pages/ProfilePage';
+import NotFoundPage from './pages/NotFoundPage';
+import TestsPage from './pages/TestsPage';
+import NotesPage from './pages/NotesPage';
+import VideoLectures from './pages/VideoLectures';
+import VideoPlayerPage from './pages/VideoPlayerPage';
+import InstructorsPage from './pages/instructors';
+import TeacherPanel from './pages/TeacherPanel';
+import LiveLecturesSection from './pages/LiveLecturesSection';
+import TestAuth from './components/TestAuth';
+import EnrollmentPage from './pages/EnrollmentPage';
+import ReceiptPage from './pages/ReceiptPage';
+import DebugTeacherID from './pages/DebugTeacherID';
+
+// Admin Components
+import AdminLayout from './components/admin/AdminLayout';
+import AdminDashboard from './pages/admin/Dashboard';
+import AdminTeachers from './pages/admin/Teachers';
+import AdminStudents from './pages/admin/Students';
+import AdminCourses from './pages/admin/Courses';
+import AdminNotifications from './pages/admin/Notifications';
+import VideoReview from './pages/admin/VideoReview';
+import NotesReview from './pages/admin/NotesReview';
+import MigrateCourses from './pages/admin/MigrateCourses';
+import SubAdmins from './pages/admin/SubAdmins';
+import DebugLectures from './pages/DebugLectures';
+import ReelsAdmin from './pages/admin/Reels';
+
+// SubAdmin Components
+import SubAdminLayout from './components/admin/SubAdminLayout';
+
+// Components
+import ProtectedRoute from './components/ProtectedRoute';
+import DeactivationBanner from './components/DeactivationBanner';
+
+const App: React.FC = () => {
+  // Initialize account service for sub-admin management
+  useEffect(() => {
+    setAccountService({
+      create: async (userId: string, email: string, password: string, name: string) => {
+        return account.create(userId, email, password, name);
+      }
+    });
+  }, []);
+  
+  return (
+    <QueryClientProvider client={queryClient}>
+      <GeminiProvider>
+        <AuthProvider>
+          <NotificationProvider>
+            <CourseProvider>
+              <ChatProvider>
+                <DeactivationBanner />
+                <AnimatePresence mode="wait">
+                  <Routes>
+                    {/* Public routes with header */}
+                    <Route element={<Layout />}>
+                      <Route path="/" element={<HomePage />} />
+                      {/* Public Courses Page */}
+                      <Route path="courses" element={<CoursesPage />} />
+                      
+                      {/* Course Detail Page with nested routes */}
+                      <Route path="courses/:courseId" element={
+                        <CourseDetailPage />
+                      }>
+                        <Route index element={null} />
+                        <Route path="videos" element={<VideoLectures />} />
+                        <Route path="videos/player" element={
+                          <VideoPlayerPage />
+                        } />
+                        <Route path="TestsPage" element={<TestsPage />} />
+                        <Route path="material" element={<NotesPage />} />
+                        <Route path="teacher" element={
+                          <ProtectedRoute>
+                            <TeacherPanel />
+                          </ProtectedRoute>
+                        } />
+                        <Route path="live-lectures" element={
+                          <ProtectedRoute>
+                            <LiveLecturesSection />
+                          </ProtectedRoute>
+                        } />
+                      </Route>
+                      
+                      <Route path="about" element={<AboutPage />} />
+                      <Route path="login" element={<LoginPage />} />
+                      <Route path="verify-email" element={<VerifyEmail />} />
+                      <Route path="verify-notice" element={<VerifyNotice />} />
+                      <Route path="signup" element={<SignupPage />} />
+                      <Route path="instructors" element={<InstructorsPage />} />
+                      <Route path="TestsPage" element={<TestsPage />} />
+                      <Route path="notes" element={<NotesPage />} />
+                      
+                      {/* Protected routes */}
+                      <Route path="test-auth" element={<TestAuth />} />
+                      
+                      <Route path="profile" element={
+                        <ProtectedRoute>
+                          <ProfilePage />
+                        </ProtectedRoute>
+                      } />
+
+                      <Route path="enroll/:courseId/:courseName" element={
+                        <ProtectedRoute>
+                          <EnrollmentPage />
+                        </ProtectedRoute>
+                      } />
+                      
+                      <Route path="receipt/:receiptId" element={
+                        <ProtectedRoute>
+                          <ReceiptPage />
+                        </ProtectedRoute>
+                      } />
+                      
+                      {/* 404 Not Found Route */}
+                      <Route path="*" element={<NotFoundPage />} />
+                    </Route>
+                    
+                    {/* Admin Routes */}
+                    <Route path="/admin" element={
+                      <ProtectedRoute>
+                        <AdminLayout />
+                      </ProtectedRoute>
+                    }>
+                      <Route index element={<AdminDashboard />} />
+                      <Route path="teachers" element={<AdminTeachers />} />
+                      <Route path="students" element={<AdminStudents />} />
+                      <Route path="courses" element={<AdminCourses />} />
+                      <Route path="notifications" element={<AdminNotifications />} />
+                      <Route path="video-review" element={<VideoReview />} />
+                      <Route path="notes/review" element={<NotesReview />} />
+                      <Route path="migrate-courses" element={<MigrateCourses />} />
+                      <Route path="subadmins" element={<SubAdmins />} />
+                      <Route path="sub-admins" element={<SubAdmins />} /> {/* Keep both for backward compatibility */}
+                      <Route path="reels" element={<ReelsAdmin />} />
+                    </Route>
+                    
+                    {/* Debug Route - Outside admin routes */}
+                    <Route path="/debug/lectures" element={<DebugLectures />} />
+                    
+                    {/* Sub-admin Routes - Using same components as admin but with subadmin layout */}
+                    <Route path="/subadmin" element={
+                      <ProtectedRoute requiredRole="subadmin">
+                        <SubAdminLayout />
+                      </ProtectedRoute>
+                    }>
+                      <Route index element={<AdminDashboard />} />
+                      <Route path="teachers" element={<AdminTeachers />} />
+                      <Route path="students" element={<AdminStudents />} />
+                      <Route path="courses" element={<AdminCourses />} />
+                      <Route path="notifications" element={<AdminNotifications />} />
+                      <Route path="video-review" element={<VideoReview />} />
+                      <Route path="notes-review" element={<NotesReview />} />
+                      <Route path="migrate-courses" element={<MigrateCourses />} />
+                      <Route path="subadmins" element={<SubAdmins />} />
+                      <Route path="sub-admins" element={<SubAdmins />} />
+                      <Route path="reels" element={<ReelsAdmin />} />
+                    </Route>
+                  </Routes>
+                </AnimatePresence>
+              </ChatProvider>
+            </CourseProvider>
+          </NotificationProvider>
+        </AuthProvider>
+      </GeminiProvider>
+    </QueryClientProvider>
+  );
+};
+
+export default App;

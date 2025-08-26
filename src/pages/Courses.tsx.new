@@ -1,0 +1,83 @@
+import React, { useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
+
+// Force admin for testing
+const isAdmin = true;
+
+const CoursesPage = () => {
+  const { user } = useAuth();
+  
+  // Debug logs
+  useEffect(() => {
+    console.log('=== DEBUG COURSES PAGE ===');
+    console.log('User:', user);
+    console.log('isAdmin:', isAdmin);
+    console.log('User role:', user?.role);
+  }, [user]);
+  
+  // Sample course data
+  const testCourse = {
+    $id: 'test123',
+    title: 'Test Course',
+    description: 'This is a test course to demonstrate admin access.',
+    duration: '1 hour',
+    price: 0
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 p-8">
+      <div className="max-w-4xl mx-auto">
+        {/* Debug Info */}
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-8 rounded">
+          <h2 className="font-bold text-yellow-800 mb-2">Debug Information</h2>
+          <div className="text-sm text-yellow-700 space-y-1">
+            <p><span className="font-medium">User ID:</span> {user?.$id || 'Not logged in'}</p>
+            <p><span className="font-medium">User Role:</span> {user?.role || 'No role'}</p>
+            <p><span className="font-medium">Admin Mode:</span> {isAdmin ? 'ENABLED' : 'disabled'}</p>
+          </div>
+        </div>
+        
+        <h1 className="text-3xl font-bold mb-8 text-gray-900">Test Course Page</h1>
+
+        {/* Test Course Card */}
+        <div className="bg-white rounded-lg shadow-md overflow-hidden border border-gray-200">
+          <div className="p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-2">{testCourse.title}</h2>
+            <p className="text-gray-600 mb-4">{testCourse.description}</p>
+            <div className="flex justify-between items-center mb-6">
+              <span className="text-sm text-gray-500">Duration: {testCourse.duration}</span>
+              <span className="font-bold text-gray-900">
+                {testCourse.price > 0 ? `$${testCourse.price}` : 'Free'}
+              </span>
+            </div>
+
+            {/* Test Button - FORCED ADMIN MODE */}
+            <div className="mt-6">
+              <Link
+                to={`/course/${testCourse.$id}`}
+                className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+              >
+                View Course (Admin Mode Forced)
+                <span className="ml-2 px-2 py-0.5 text-xs bg-white/30 rounded-full">
+                  Admin Access
+                </span>
+              </Link>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-md">
+          <h3 className="text-lg font-medium text-blue-800 mb-2">Testing Instructions</h3>
+          <ul className="list-disc pl-5 space-y-1 text-blue-700 text-sm">
+            <li>This is a test page with admin mode <strong>FORCED ON</strong></li>
+            <li>The button should be green with "View Course (Admin Mode Forced)"</li>
+            <li>Check browser console for debug information (Press F12)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default CoursesPage;

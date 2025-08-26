@@ -1,0 +1,21 @@
+.searchInput {
+  color: black !important;
+  -webkit-text-fill-color: black !important;
+}
+
+.searchInput::placeholder {
+  color: #666 !important;
+  opacity: 1 !important;
+}
+
+/* Force colors in all states */
+.searchInput:focus,
+.searchInput:active,
+.searchInput:hover,
+.dark .searchInput,
+.dark .searchInput:focus,
+.dark .searchInput:active,
+.dark .searchInput:hover {
+  color: black !important;
+  -webkit-text-fill-color: black !important;
+}
