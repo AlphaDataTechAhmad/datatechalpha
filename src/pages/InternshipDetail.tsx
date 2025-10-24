@@ -5,12 +5,13 @@ import { toast } from 'sonner';
 import { DATABASE_ID, INTERNSHIP_APPLICATIONS_COLLECTION_ID, INTERNSHIPS_COLLECTION_ID } from '../appwriteConfig';
 import { Internship } from '../types/internship';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Calendar, Clock, MapPin, ExternalLink, CheckCircle, BookOpen } from 'lucide-react';
+import { ArrowLeft, Calendar, Clock, MapPin, ExternalLink, CheckCircle, BookOpen, RefreshCw, AlertCircle, CreditCard, Code, Info } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { Query } from 'appwrite';
 import { Models } from 'appwrite';
 import ExamSchedulingForm from '../components/internships/ExamSchedulingForm';
 import ApplicationForm from '../components/internships/ApplicationForm';
+import TechnicalTestApplicationForm from '../components/internships/TechnicalTestApplicationForm';
 
 type TabType = 'overview' | 'projects' | 'videos' | 'sessions' | 'apply';
 
@@ -55,18 +56,106 @@ interface TestResultDocument extends Models.Document {
   test_scheduled?: boolean;
   exam_scheduled?: boolean;
   test_result?: string;
-  test_status?: string;
   test_attempt_id: string;
   start_date?: string;
   expiry_date?: string;
 }
 
-// Function to format description into sections with bullet points
-const formatDescription = (description: string) => {
-  const sections = description.split('\n\n').filter(section => section.trim() !== '');
+// Component to handle different test statuses
+interface TestStatusSectionProps {
+  hasFailedTest: boolean;
+  id: string | undefined;
+  isProcessingPayment: boolean;
+  handlePayment: () => void;
+  internship: Internship;
+  navigate: (path: string) => void;
+  hasApplied: boolean;
+  setShowExamSchedulingForm: (show: boolean) => void;
+  handleApply: () => void;
+}
+
+const TestStatusSection: React.FC<TestStatusSectionProps> = ({
+  hasFailedTest,
+  id,
+  isProcessingPayment,
+  handlePayment,
+  internship,
+  navigate,
+  hasApplied,
+  setShowExamSchedulingForm,
+  handleApply
+}) => {
+  // First check for failed test
+  if (hasFailedTest || localStorage.getItem(`failed_test_${id}`) === 'true') {
+    return (
+      <div className="mt-4 space-y-3">
+        <div className="p-3 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-800 rounded-lg flex items-center justify-center gap-2">
+          <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+          <span className="text-yellow-700 dark:text-yellow-300 font-medium">Test Attempted</span>
+        </div>
+        <button 
+          onClick={handlePayment}
+          disabled={isProcessingPayment}
+          className={`w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
+            isProcessingPayment ? 'opacity-70 cursor-not-allowed' : ''
+          }`}
+        >
+          {isProcessingPayment ? (
+            <>
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Processing...
+            </>
+          ) : (
+            <>
+              <CreditCard className="w-4 h-4" />
+              Enroll Now - {internship.currency || '₹'} {internship.price || '0'}
+            </>
+          )}
+        </button>
+        
+        <button 
+          onClick={() => navigate(`/internships/${id}/verify-payment`)}
+          className="w-full mt-2 bg-blue-50 hover:bg-blue-100 text-blue-700 font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 border border-blue-200"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Verify Payment Status
+        </button>
+      </div>
+    );
+  }
   
-  return sections.map(section => {
-    const titleMatch = section.match(/^(.+):/);
+  // Then check if user has already applied
+  if (hasApplied) {
+    return (
+      <button 
+        onClick={() => setShowExamSchedulingForm(true)}
+        className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+      >
+        <BookOpen className="w-4 h-4" />
+        Schedule Exam
+      </button>
+    );
+  }
+  
+  // Default case - Show Apply Now button
+  return (
+    <button 
+      onClick={handleApply}
+      className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+    >
+      Apply Now
+    </button>
+  );
+};
+
+// Function to format description into sections with bullet points
+function formatDescription(description: string) {
+  const sections = description.split('\n\n');
+  const formattedSections = sections.map(section => {
+    const titleMatch = section.match(/^## (.+)$/m);
     let title = '';
     let content = section;
     
@@ -85,7 +174,9 @@ const formatDescription = (description: string) => {
       points: points.length > 0 ? points : [content]
     };
   });
-};
+
+  return formattedSections; // Added missing return statement
+}
 
 const InternshipDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -96,6 +187,7 @@ const InternshipDetail = () => {
   const [isCheckingStatus, setIsCheckingStatus] = useState(true);
   const [hasApplied, setHasApplied] = useState(false);
   const [hasPassedTest, setHasPassedTest] = useState(false);
+  const [hasFailedTest, setHasFailedTest] = useState(false);
   const [hasScheduledExam, setHasScheduledExam] = useState(false);
   const [isEnrolled, setIsEnrolled] = useState(false);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -103,8 +195,11 @@ const InternshipDetail = () => {
   const [activeTab, setActiveTab] = useState('overview');
   const [showExamSchedulingForm, setShowExamSchedulingForm] = useState(false);
   const [showApplicationForm, setShowApplicationForm] = useState(false);
+  const [showTechnicalTestForm, setShowTechnicalTestForm] = useState(false);
   const [application, setApplication] = useState<Models.Document | null>(null);
   const [isRazorpayLoaded, setIsRazorpayLoaded] = useState(false);
+  const [hasAppliedForTechnicalTest, setHasAppliedForTechnicalTest] = useState(false);
+  const [isCheckingTechnicalTest, setIsCheckingTechnicalTest] = useState(true);
   const { user } = useAuth() || {};
   const navigate = useNavigate();
 
@@ -141,7 +236,7 @@ const InternshipDetail = () => {
   }, []);
 
   // Mock functions for unimplemented APIs
-  const generateTestLink = async (internshipId: string, userId: string) => {
+  const generateTestLink = async (internshipId: string, userId: string, userData?: any) => {
     // In a real app, this would call your backend to generate a test link
     await new Promise(resolve => setTimeout(resolve, 1000));
     return `https://example.com/test/${internshipId}?user=${userId}`;
@@ -215,17 +310,24 @@ const InternshipDetail = () => {
         
         // Now process the test results to determine if the test was passed
         if (foundTestResults.documents.length > 0) {
-          hasPassedTestLocal = foundTestResults.documents.some((doc: TestResultDocument) => {
+          let hasTestResult = false;
+          let hasAnyPassed = false;
+          let hasAnyFailed = false;
+          
+          for (const doc of foundTestResults.documents) {
             // Check if test is completed (either by status or completed_at)
             const isCompleted = doc.status === 'completed' || 
                               doc.completed_at || 
                               doc.status === 'passed' ||
+                              doc.status === 'failed' ||
                               doc.status === 'comp';
             
             if (!isCompleted) {
               console.log(`Test ${doc.$id} is not completed`);
-              return false;
+              continue;
             }
+            
+            hasTestResult = true;
             
             // Check if test is passed (handles both boolean and string values)
             const isPassed = doc.passed === true || 
@@ -238,7 +340,7 @@ const InternshipDetail = () => {
               ? doc.percentage 
               : parseFloat(doc.percentage || '0');
             
-            const hasPassingScore = score >= 50 || percentage >= 50;
+            const hasPassingScore = (score >= 90 && score <= 100) || (percentage >= 90 && percentage <= 100);
             const isPassing = isPassed || hasPassingScore;
             
             if (isPassing) {
@@ -249,7 +351,8 @@ const InternshipDetail = () => {
                 percentage,
                 status: doc.status
               });
-              return true;
+              hasAnyPassed = true;
+              break; // If any test is passed, we can break early
             } else {
               console.log(`Test ${doc.$id} does not meet passing criteria`, { 
                 isPassed, 
@@ -258,12 +361,26 @@ const InternshipDetail = () => {
                 percentage,
                 status: doc.status
               });
-              return false;
+              hasAnyFailed = true;
             }
-          });
+          }
           
-          console.log('Has passed test for this internship:', hasPassedTestLocal);
-        } else {
+          hasPassedTestLocal = hasAnyPassed;
+          
+          // If we have test results but none passed, it's a fail
+          if (hasTestResult && !hasAnyPassed && hasAnyFailed) {
+            console.log('Test was attempted but not passed, showing enrollment option');
+            // Set the failed test state and localStorage flag
+            setHasFailedTest(true);
+            localStorage.setItem(`failed_test_${id}`, 'true');
+          } else {
+            setHasFailedTest(false);
+          }
+        }
+        
+        console.log('Has passed test for this internship:', hasPassedTestLocal);
+        
+        if (foundTestResults.documents.length === 0) {
           console.log('No test results found for this internship');
         }
         
@@ -302,6 +419,22 @@ const InternshipDetail = () => {
       let paymentSuccessLocal = false;
       let hasScheduledExamLocal = false;
       let applicationLocal = null;
+      let hasTechnicalTestApplication = false;
+      
+      // Check if user has already applied for technical test
+      try {
+        const technicalTestApps = await databases.listDocuments(
+          DATABASE_ID,
+          'technical_form',
+          [
+            Query.equal('email', user.email || ''),
+            Query.equal('internshipId', id)
+          ]
+        );
+        hasTechnicalTestApplication = technicalTestApps.documents.length > 0;
+      } catch (error) {
+        console.error('Error checking technical test applications:', error);
+      }
 
       try {
         const applications = await databases.listDocuments(
@@ -493,7 +626,19 @@ const InternshipDetail = () => {
       return;
     }
 
+    // Check if already enrolled
+    if (isEnrolled) {
+      toast.info('You are already enrolled in this internship');
+      if (id) {
+        navigate(`/internships/${id}/dashboard/overview`, { replace: true });
+      }
+      return;
+    }
+
     setIsProcessingPayment(true);
+    
+    // Show loading state
+    toast.loading('Preparing payment...', { id: 'payment-loading' });
 
     try {
       // First, check if the user has already applied
@@ -508,28 +653,53 @@ const InternshipDetail = () => {
 
       let appToUpdate = existingApps[0];
       
+      // If user has a completed payment, redirect to dashboard
+      if (appToUpdate?.payment_status === 'completed') {
+        toast.dismiss('payment-loading');
+        toast.success('Payment already completed. Redirecting to dashboard...');
+        if (id) {
+          navigate(`/internships/${id}/dashboard/overview`, { replace: true });
+        }
+        setIsProcessingPayment(false);
+        return;
+      }
+      
       // If no existing application, create one with a temporary payment ID
       if (!appToUpdate) {
-        const tempPaymentId = `temp_${Date.now()}`;
-        const newApp = await databases.createDocument(
-          DATABASE_ID,
-          INTERNSHIP_APPLICATIONS_COLLECTION_ID,
-          'unique()',
-          {
-            userId: user.$id,
-            email: user.email,
-            full_name: user.name || 'User',
-            phone: user.phone || '',  // Adding required phone field with empty string as fallback
-            testLink: '',  // Adding required testLink field with empty string as fallback
-            internship_id: id,
-            applied_at: new Date().toISOString(),
-            payment_id: tempPaymentId,
-            payment_status: 'pending',
-            amount: price.toString()
-          }
-        );
-        appToUpdate = newApp;
-        setApplication(newApp);
+        try {
+          const tempPaymentId = `temp_${Date.now()}`;
+          const newApp = await databases.createDocument(
+            DATABASE_ID,
+            INTERNSHIP_APPLICATIONS_COLLECTION_ID,
+            'unique()',
+            {
+              userId: user.$id,
+              email: user.email,
+              full_name: user.name || 'User',
+              phone: user.phone || '',
+              testLink: '',
+              internship_id: id,
+              applied_at: new Date().toISOString(),
+              payment_id: tempPaymentId,
+              payment_status: 'pending',
+              amount: price.toString(),
+              status: 'payment_pending'
+            }
+          );
+          appToUpdate = newApp;
+          setApplication(newApp);
+          toast.dismiss('payment-loading');
+          toast.success('Application created. Opening payment gateway...');
+        } catch (error) {
+          console.error('Error creating application:', error);
+          toast.dismiss('payment-loading');
+          toast.error('Failed to create application. Please try again.');
+          setIsProcessingPayment(false);
+          return;
+        }
+      } else {
+        toast.dismiss('payment-loading');
+        toast.info('Opening payment gateway...');
       }
 
       // Initialize Razorpay options
@@ -542,51 +712,72 @@ const InternshipDetail = () => {
         order_id: undefined as string | undefined,
         handler: async function (response: any) {
           try {
+            // Show loading state while updating payment status
+            toast.loading('Verifying your payment...', { id: 'payment-verification' });
+            
             // Update the application with payment success
-            // Only include fields that are known to exist in the schema
             const updateData: Record<string, any> = {
               payment_id: response.razorpay_payment_id || response.razorpay_order_id,
               razorpay_order_id: response.razorpay_order_id,
               payment_status: 'completed',
-              amount: price.toString()
-            };
-            
-            // Only include fields that exist in the original document
-            const allowedFields = Object.keys(appToUpdate);
-            const fieldsToAdd = {
-              razorpay_signature: response.razorpay_signature,
+              amount: price.toString(),
+              status: 'enrolled',
               enrolled_at: new Date().toISOString(),
-              status: 'enrolled'
+              razorpay_signature: response.razorpay_signature
             };
             
-            // Only add fields that exist in the schema
-            Object.entries(fieldsToAdd).forEach(([key, value]) => {
-              if (allowedFields.includes(key)) {
-                updateData[key] = value;
+            try {
+              const updatedApp = await databases.updateDocument(
+                DATABASE_ID,
+                INTERNSHIP_APPLICATIONS_COLLECTION_ID,
+                appToUpdate.$id,
+                updateData
+              );
+              
+              // Update local state
+              setApplication(updatedApp);
+              setPaymentSuccess(true);
+              setIsEnrolled(true);
+              
+              // Show success message
+              toast.dismiss('payment-verification');
+              toast.success('Payment successful! You are now enrolled in the internship.');
+              
+              // Redirect to dashboard after a short delay
+              setTimeout(() => {
+                if (id) {
+                  navigate(`/internships/${id}/verify-payment`, { 
+                    state: { fromPayment: true },
+                    replace: true 
+                  });
+                }
+              }, 1500);
+              
+            } catch (updateError) {
+              console.error('Error updating payment status:', updateError);
+              toast.dismiss('payment-verification');
+              toast.error('Payment verification failed. Please contact support with your payment ID.');
+              
+              // Still redirect to verification page
+              if (id) {
+                navigate(`/internships/${id}/verify-payment`, { 
+                  state: { fromPayment: true },
+                  replace: true 
+                });
               }
-            });
-            
-            const updatedApp = await databases.updateDocument(
-              DATABASE_ID,
-              INTERNSHIP_APPLICATIONS_COLLECTION_ID,
-              appToUpdate.$id,
-              updateData
-            );
-            
-            // Update local state
-            setApplication(updatedApp);
-            setPaymentSuccess(true);
-            setIsEnrolled(true);
-            
-            // Show success message
-            toast.success('Payment successful! You are now enrolled in the internship.');
-            
-            // Refresh application status to ensure consistency
-            await checkApplicationStatus();
-            
+            }
           } catch (error) {
-            console.error('Error updating payment status:', error);
-            toast.error('Payment successful but failed to update enrollment status. Please contact support.');
+            console.error('Error in payment handler:', error);
+            toast.dismiss('payment-verification');
+            toast.error('An error occurred while processing your payment. Please verify your enrollment status.');
+            
+            // Still redirect to verification page
+            if (id) {
+              navigate(`/internships/${id}/verify-payment`, { 
+                state: { fromPayment: true },
+                replace: true 
+              });
+            }
           } finally {
             setIsProcessingPayment(false);
           }
@@ -746,15 +937,66 @@ const InternshipDetail = () => {
   };
 
   // Check application status when user changes or when checkApplicationStatus changes
+  // Check if user has already applied for technical test by email
+  const checkTechnicalTestApplication = useCallback(async () => {
+    if (!user?.email || !id) {
+      setIsCheckingTechnicalTest(false);
+      return;
+    }
+    
+    try {
+      const response = await databases.listDocuments(
+        DATABASE_ID,
+        'technical_form',
+        [
+          Query.equal('email', user.email),
+          Query.equal('internshipId', id)
+        ]
+      );
+      
+      setHasAppliedForTechnicalTest(response.documents.length > 0);
+    } catch (error) {
+      console.error('Error checking technical test application:', error);
+      toast.error('Failed to check technical test application status');
+    } finally {
+      setIsCheckingTechnicalTest(false);
+    }
+  }, [user?.email, id]);
+
+  // Check technical test application status on component mount and when user changes
+  useEffect(() => {
+    if (user?.email && id) {
+      checkTechnicalTestApplication();
+    } else {
+      setIsCheckingTechnicalTest(false);
+    }
+  }, [user?.email, id, checkTechnicalTestApplication]);
+
   useEffect(() => {
     if (user && id) {
-      checkApplicationStatus().finally(() => {
+      // If user is a teacher, redirect directly to dashboard
+      if (user.role === 'teacher' || user.role === 'admin' || user.role === 'subadmin') {
+        console.log('User is a teacher/admin, redirecting directly to dashboard');
+        navigate(`/internships/${id}/dashboard/overview`, { replace: true });
+        setIsCheckingStatus(false);
+        return;
+      }
+      
+      // For regular users, check application status
+      checkApplicationStatus().then((result) => {
+        setIsCheckingStatus(false);
+        
+        // If payment is completed, redirect to dashboard
+        if (result?.application?.payment_status === 'completed') {
+          navigate(`/internships/${id}/dashboard/overview`, { replace: true });
+        }
+      }).catch(() => {
         setIsCheckingStatus(false);
       });
     } else {
       setIsCheckingStatus(false);
     }
-  }, [user, id, checkApplicationStatus]);
+  }, [user, id, checkApplicationStatus, navigate]);
 
   useEffect(() => {
     const fetchInternship = async () => {
@@ -983,55 +1225,128 @@ const InternshipDetail = () => {
                       <span className="text-green-700 dark:text-green-300 font-medium">Enrolled</span>
                     </div>
                   </div>
-                ) : hasPassedTest ? (
+                ) : hasScheduledExam || application?.examScheduled ? (
                   <div className="mt-4 space-y-3">
-                    <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg flex items-center justify-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
-                      <span className="text-green-700 dark:text-green-300 font-medium">Test Passed</span>
+                    <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-center gap-2">
+                      <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      <span className="text-blue-700 dark:text-blue-300 font-medium">Exam Scheduled</span>
                     </div>
                     <button 
-                      onClick={handlePayment}
-                      disabled={isProcessingPayment}
-                      className={`w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 ${
-                        isProcessingPayment ? 'opacity-70 cursor-not-allowed' : ''
-                      }`}
+                      onClick={async () => {
+                        try {
+                          // First, check if we already have the test link in the application
+                          if (application?.test_link) {
+                            navigate(`/internship-test/${application.test_link}`);
+                            return;
+                          }
+                          
+                          // If not in application, check the internship_test_links collection
+                          const testLinks = await databases.listDocuments(
+                            DATABASE_ID,
+                            '689923bc000f2d15a263', // internship_test_links collection ID
+                            [
+                              Query.equal('userId', user?.$id || ''),
+                              Query.equal('internship_id', id || ''),
+                              Query.orderDesc('$createdAt'),
+                              Query.limit(1)
+                            ]
+                          );
+                          
+                          if (testLinks.documents.length > 0) {
+                            const testLink = testLinks.documents[0];
+                            // Try to find the test URL in various possible fields
+                            const possibleUrlFields = [
+                              'test_url', 'test_link', 'url', 'test_attempt_id', 'testUrl', 'testLink', 'testId', 'test_id'
+                            ] as const;
+                            
+                            // Find the first field that exists and has a value
+                            for (const field of possibleUrlFields) {
+                              if (testLink[field]) {
+                                const testUrl = String(testLink[field]);
+                                // Extract just the test ID if it's a full URL
+                                const testId = testUrl.split('/').pop() || testUrl;
+                                navigate(`/internship-test/${testId}`);
+                                return;
+                              }
+                            }
+                            
+                            // If we have a document ID but no specific URL field, try using the document ID
+                            if (testLink.$id) {
+                              navigate(`/internship-test/${testLink.$id}`);
+                              return;
+                            }
+                          }
+                          
+                          // If we get here, no valid test link was found
+                          toast.error('Test link not found. Please contact support.');
+                          
+                        } catch (error) {
+                          console.error('Error fetching test link:', error);
+                          toast.error('Failed to load test. Please try again or contact support.');
+                        }
+                      }}
+                      className="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
                     >
-                      {isProcessingPayment ? (
-                        <>
-                          <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                          </svg>
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="w-4 h-4" />
-                          Enroll Now - {internship.currency || '₹'} {internship.price || '0'}
-                        </>
-                      )}
+                      <BookOpen className="w-4 h-4" />
+                      Take Test Now
                     </button>
                   </div>
-                ) : hasScheduledExam || application?.examScheduled ? (
-                  <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center justify-center gap-2">
-                    <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                    <span className="text-blue-700 dark:text-blue-300 font-medium">Exam Scheduled</span>
+                ) : hasPassedTest ? (
+                  <div className="space-y-4">
+                    {isCheckingTechnicalTest ? (
+                      <div className="p-4 bg-gray-50 dark:bg-gray-800 rounded-lg flex items-center justify-center">
+                        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+                      </div>
+                    ) : hasAppliedForTechnicalTest ? (
+                      <div className="space-y-4">
+                        <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                          <div className="flex items-start gap-3">
+                            <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                            <div>
+                              <h4 className="text-green-800 dark:text-green-200 font-semibold text-lg mb-1">Application Submitted! 🎉</h4>
+                              <p className="text-green-700 dark:text-green-300 text-sm">
+                                Congratulations! You've successfully applied for the technical test. We'll review your application and get back to you soon with the next steps.
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg">
+                          <div className="flex items-center gap-2">
+                            <Info className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0" />
+                            <span className="text-blue-700 dark:text-blue-300 text-sm">
+                              Check your email for further instructions about the technical test.
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="p-3 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg flex items-center justify-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-green-600 dark:text-green-400" />
+                          <span className="text-green-700 dark:text-green-300 font-medium">Test Passed</span>
+                        </div>
+                        <button 
+                          onClick={() => setShowTechnicalTestForm(true)}
+                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Code className="w-4 h-4" />
+                          Apply for Technical Test
+                        </button>
+                      </div>
+                    )}
                   </div>
-                ) : hasApplied ? (
-                  <button 
-                    onClick={() => setShowExamSchedulingForm(true)}
-                    className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    <BookOpen className="w-4 h-4" />
-                    Schedule Exam
-                  </button>
                 ) : (
-                  <button 
-                    onClick={handleApply}
-                    className="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2"
-                  >
-                    Apply Now
-                  </button>
+                  <TestStatusSection 
+                    hasFailedTest={hasFailedTest}
+                    id={id}
+                    isProcessingPayment={isProcessingPayment}
+                    handlePayment={handlePayment}
+                    internship={internship}
+                    navigate={navigate}
+                    hasApplied={hasApplied}
+                    setShowExamSchedulingForm={setShowExamSchedulingForm}
+                    handleApply={handleApply}
+                  />
                 )}
               </div>
             </div>
@@ -1167,7 +1482,50 @@ const InternshipDetail = () => {
         )}
       </AnimatePresence>
 
-
+      {/* Technical Test Application Form Modal */}
+      <AnimatePresence>
+        {showTechnicalTestForm && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+            onClick={(e) => {
+              if (e.target === e.currentTarget) {
+                setShowTechnicalTestForm(false);
+              }
+            }}
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 20 }}
+              transition={{ type: 'spring', damping: 25, stiffness: 500 }}
+              className="w-full max-w-md bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden relative max-h-[90vh] overflow-y-auto"
+            >
+              <button
+                onClick={() => setShowTechnicalTestForm(false)}
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-gray-400 dark:hover:text-gray-200 z-10"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+              <TechnicalTestApplicationForm
+                internshipId={internship?.id || ''}
+                userId={user?.$id}
+                onSuccess={() => {
+                  setShowTechnicalTestForm(false);
+                  setHasAppliedForTechnicalTest(true);
+                  toast.success('Technical test application submitted successfully!');
+                  checkTechnicalTestApplication(); // Refresh the status
+                }}
+                onCancel={() => setShowTechnicalTestForm(false)}
+              />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -2,6 +2,7 @@ import { createBrowserRouter, Navigate, Outlet, useParams } from 'react-router-d
 import React, { ReactNode, FC } from 'react';
 import { GeminiProvider } from './contexts/GeminiContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { UserRole } from './types/user.types';
 import { NotificationProvider } from './contexts/NotificationContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import { CourseProvider } from './contexts/CourseContext';
@@ -46,6 +47,14 @@ import SubAdminLayout from './components/admin/SubAdminLayout';
 import SubAdmins from './pages/admin/SubAdmins';
 import AdminDashboard from './pages/admin/Dashboard';
 import TestzPage from './pages/Testz';
+import TestConductorDashboard from './pages/TestConductorDashboard';
+import TestimonialsPage from './pages/admin/TestimonialsPage';
+import Testimonials from './pages/admin/Testimonials';
+import IntelliTestRoutes from './routes/IntelliTestRoutes';
+import TestConductorLogin from './pages/TestConductorLogin';
+import CreateExamPage from './pages/CreateExamPage';
+import { TestConductorAuthProvider } from './contexts/TestConductorAuthContext';
+import TestConductorRoute from './components/TestConductorRoute';
 import InternshipsDashboard from './pages/admin/InternshipsDashboard';
 import CreateInternshipPage from './pages/admin/CreateInternshipPage';
 import TestLinksManager from './pages/admin/TestLinksManager';
@@ -71,13 +80,17 @@ import InstructorsPage from './pages/instructors';
 import TestLinkAuth from './components/test/TestLinkAuth';
 import TestsAdmin from './pages/admin/TestsAdmin';
 import TestConductor from './pages/TestConductor';
-import TestsPage from './pages/TestsPage';
 import InternTest from './pages/InternTest';
 import InternshipTestLogin from './pages/InternshipTestLogin';
 import InternshipTestQuestions from './pages/InternshipTestQuestions';
 import InternExams from './pages/admin/InternExams';
 import VerifyUsers from './components/admin/VerifyUsers';
 import EnrollmentPage from './pages/EnrollmentPage';
+import InternshipDashboard from './pages/InternshipDashboard';
+import Overview from './pages/internship/Overview';
+import LiveClasses from './pages/internship/LiveClasses';
+import Notes from './pages/internship/Notes';
+import PaymentVerification from './components/internships/PaymentVerification';
 
 // Create a wrapper component that includes all providers
 const AppWithProviders = ({ children }: { children: React.ReactNode }) => (
@@ -110,12 +123,15 @@ const TestProviders = ({ children }: { children: ReactNode }) => {
 // Type for route elements that need authentication
 interface ProtectedRouteElementProps {
   children: ReactNode;
-  requiredRole?: 'admin' | 'subadmin' | 'teacher' | 'user';
+  requiredRole?: UserRole | 'student' | 'user';
 }
 
-const ProtectedRouteElement = ({ children, requiredRole = 'user' }: ProtectedRouteElementProps) => {
+const ProtectedRouteElement = ({ children, requiredRole = 'student' }: ProtectedRouteElementProps) => {
+  // Map 'user' role to 'student' for the ProtectedRoute component
+  const mappedRole = requiredRole === 'user' ? 'student' : requiredRole;
+  
   return (
-    <ProtectedRoute requiredRole={requiredRole}>
+    <ProtectedRoute requiredRole={mappedRole as any}>
       {children}
     </ProtectedRoute>
   );
@@ -285,6 +301,7 @@ export const router = createBrowserRouter([
       { index: true, element: <HomePage /> },
       { path: 'about', element: <AboutPage /> },
       { path: 'scholarship', element: <ScholarshipPage /> },
+      { path: 'intellitest/*', element: <IntelliTestRoutes /> },
       { path: 'courses', element: <PublicCoursesPage /> },
       { path: 'testz', element: <TestzPage /> },
       { path: 'login', element: <LoginPage /> },
@@ -335,7 +352,49 @@ export const router = createBrowserRouter([
         path: 'internships', 
         children: [
           { index: true, element: <InternshipsPage /> },
-          { path: ':id', element: <InternshipDetail /> }
+          { 
+            path: ':id',
+            children: [
+              {
+                index: true,
+                element: <InternshipDetail />
+              },
+              {
+                path: 'test',
+                element: <InternshipTestQuestions />
+              },
+              {
+                path: 'verify-payment',
+                element: <PaymentVerification />
+              },
+              {
+                path: 'dashboard',
+                element: (
+                  <ProtectedRoute requiredRole="user">
+                    <InternshipDashboard />
+                  </ProtectedRoute>
+                ),
+                children: [
+                  {
+                    index: true,
+                    element: <Navigate to="overview" replace />
+                  },
+                  {
+                    path: 'overview',
+                    element: <Overview />
+                  },
+                  {
+                    path: 'live-classes',
+                    element: <LiveClasses />
+                  },
+                  {
+                    path: 'notes',
+                    element: <Notes />
+                  }
+                ]
+              }
+            ]
+          },
         ]
       },
       { path: 'internship-test/:testId', element: <InternshipTestLogin /> },
@@ -395,12 +454,69 @@ export const router = createBrowserRouter([
         ]
       },
       {
-        path: 'courses/:courseId/TestsPage',
+        path: 'test/:testId',
         element: (
-          <ProtectedRouteElement requiredRole="user">
-            <TestsPage />
+          <ProtectedRouteElement requiredRole="teacher">
+            <TestConductor />
           </ProtectedRouteElement>
-        )
+        ),
+      },
+      // Test Conductor Authentication Routes
+      {
+        path: 'test-conductor',
+        element: (
+          <TestConductorAuthProvider>
+            <TestLayout>
+              <Outlet />
+            </TestLayout>
+          </TestConductorAuthProvider>
+        ),
+        children: [
+          {
+            path: 'login',
+            element: <TestConductorLogin />,
+          },
+        ],
+      },
+      
+      // Exam Creation Route
+      {
+        path: 'exams/new',
+        element: (
+          <TestConductorAuthProvider>
+            <TestConductorRoute>
+              <TestLayout>
+                <CreateExamPage />
+              </TestLayout>
+            </TestConductorRoute>
+          </TestConductorAuthProvider>
+        ),
+      },
+      
+      // Test Dashboard Routes (protected, requires test conductor authentication)
+      {
+        path: 'test-dashboard',
+        element: (
+          <TestConductorAuthProvider>
+            <TestConductorRoute>
+              <TestLayout>
+                <TestConductorDashboard />
+              </TestLayout>
+            </TestConductorRoute>
+          </TestConductorAuthProvider>
+        ),
+      },
+      {
+        path: 'test-dashboard/:testId',
+        element: (
+          <TestConductorAuthProvider>
+            <TestConductorRoute>
+              <TestLayout>
+                <TestConductorDashboard />
+              </TestLayout>
+            </TestConductorRoute>
+          </TestConductorAuthProvider>
+        ),
       },
       
       // Test routes (use TestLayout without header/footer)
@@ -438,14 +554,12 @@ export const router = createBrowserRouter([
       // Admin routes
       {
         path: 'admin',
-        element: (
-          <AdminRoute>
-            <Outlet />
-          </AdminRoute>
-        ),
+        element: <AdminRoute />,
         children: [
-          { index: true, element: <Navigate to="dashboard" replace /> },
+          { index: true, element: <AdminDashboard /> },
           { path: 'dashboard', element: <AdminDashboard /> },
+          { path: 'testimonials', element: <TestimonialsPage /> },
+          { path: 'testimonials/manage', element: <Testimonials /> },
           { 
             path: 'subadmins', 
             element: <SubAdmins /> 

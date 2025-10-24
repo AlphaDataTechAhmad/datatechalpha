@@ -325,7 +325,7 @@ const ContactPage: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <h3 className="text-lg font-semibold text-white">Phone</h3>
-                    <p className="text-blue-100 hover:text-white transition-colors">+91 8958640529</p>
+                    <p className="text-blue-100 hover:text-white transition-colors">+91 9760010407</p>
                     <p className="text-blue-100/80 text-sm">Mon - Sun, 9:00 AM - 6:00 PM</p>
                   </div>
                 </div>
@@ -336,9 +336,9 @@ const ContactPage: React.FC = () => {
                   </div>
                   <div className="ml-4">
                     <h3 className="text-lg font-semibold text-white">Location</h3>
-                    <p className="text-blue-100 hover:text-white transition-colors">Block A</p>
-                    <p className="text-blue-100/80">Old sunny enclave</p>
-                    <p className="text-blue-100/80">sector - 125 Mohali Chandigarh, Pin - 140301</p>
+                    <p className="text-blue-100 hover:text-white transition-colors">Uni tech Cyber Park</p>
+                    <p className="text-blue-100/80">Sector - 39</p>
+                    <p className="text-blue-100/80">Gurugram, Haryana - 122002</p>
                   </div>
                 </div>
               </div>
@@ -381,8 +381,8 @@ const ContactPage: React.FC = () => {
                 </div>
               </div>
               <div className="mt-4 text-center">
-                <p className="text-blue-100">Block A, Old Sunny Enclave</p>
-                <p className="text-blue-100">Sector 125, Mohali, Punjab 140301</p>
+                <p className="text-blue-100">Uni tech Cyber Park</p>
+                <p className="text-blue-100">Sector - 39, Gurugram, Haryana - 122002</p>
               </div>
             </div>
           </motion.div>

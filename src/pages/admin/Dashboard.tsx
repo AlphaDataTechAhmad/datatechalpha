@@ -62,26 +62,70 @@ const AdminDashboard = () => {
         setIsLoading(true);
         
         // Fetch total students (users with role 'student')
-        const studentsResponse = await databases.listDocuments(
-          DATABASE_ID,
-          PROFILE_COLLECTION_ID,
-          [
-            Query.equal('role', 'student')
-          ]
-        );
+        let studentCount = 0;
+        let teacherCount = 0;
         
-        // Fetch total teachers (only users with role 'teacher')
-        const teachersResponse = await databases.listDocuments(
-          DATABASE_ID,
-          PROFILE_COLLECTION_ID,
-          [
-            Query.equal('role', 'teacher')
-          ]
-        );
+        try {
+          // First, try to get all students in a single query
+          console.log('Fetching students with role=student...');
+          const studentsResponse = await databases.listDocuments(
+            DATABASE_ID,
+            PROFILE_COLLECTION_ID,
+            [
+              Query.equal('role', 'student'),
+              Query.limit(10000) // Increased limit to ensure we get all students
+            ]
+          );
+          console.log('Students response:', JSON.stringify(studentsResponse, null, 2));
+          studentCount = studentsResponse.total;
+          console.log('Total students found:', studentCount);
+          
+          // Log the first few student documents to verify the data
+          if (studentsResponse.documents && studentsResponse.documents.length > 0) {
+            console.log('Sample student documents:', 
+              studentsResponse.documents.slice(0, 3).map(doc => ({
+                id: doc.$id,
+                name: doc.name,
+                role: doc.role,
+                email: doc.email
+              }))
+            );
+          }
+          
+          // If total is 0, try a different approach
+          if (studentCount === 0) {
+            console.log('No students found with role=student, trying alternative query...');
+            const allUsers = await databases.listDocuments(
+              DATABASE_ID,
+              PROFILE_COLLECTION_ID,
+              [Query.limit(10000)]
+            );
+            const students = allUsers.documents.filter(doc => doc.role === 'student');
+            studentCount = students.length;
+            console.log('Alternative query found students:', studentCount);
+          }
+        } catch (error) {
+          console.error('Error fetching students:', error);
+          // Fallback to a default value if there's an error
+          studentCount = 0;
+        }
         
-        // Calculate changes (you might want to store these values in your database)
-        const studentCount = studentsResponse.total;
-        const teacherCount = teachersResponse.total;
+        try {
+          // Fetch total teachers (users with role 'teacher')
+          const teachersResponse = await databases.listDocuments(
+            DATABASE_ID,
+            PROFILE_COLLECTION_ID,
+            [
+              Query.equal('role', 'teacher'),
+              Query.limit(1000)
+            ]
+          );
+          teacherCount = teachersResponse.total;
+          console.log('Total teachers found:', teacherCount);
+        } catch (error) {
+          console.error('Error fetching teachers:', error);
+          teacherCount = 0;
+        }
         
         // Fetch total courses
         const coursesResponse = await databases.listDocuments(

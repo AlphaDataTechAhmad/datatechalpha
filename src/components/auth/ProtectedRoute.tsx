@@ -5,7 +5,7 @@ import { UserRole } from '@/types/user.types';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  requiredRole?: UserRole | 'student';
+  requiredRole?: UserRole | 'student' | 'user';
   redirectTo?: string;
 }
 
@@ -43,43 +43,51 @@ export const ProtectedRoute = ({
       console.log('No user role found');
       return false;
     }
+
+    const userRole = user.role;
     
-    // If user is admin, they have access to everything
-    if (user.role === 'admin') {
-      console.log('User is admin, access granted');
+    // Define role hierarchy (each role has access to itself and all roles below it)
+    const roleHierarchy: Record<string, number> = {
+      'admin': 4,
+      'subadmin': 3,
+      'teacher': 2,
+      'testconductor': 2,
+      'student': 1,
+      'user': 0
+    };
+
+    // If required role is not in the hierarchy, deny access
+    if (requiredRole && !(requiredRole in roleHierarchy)) {
+      console.log(`Unknown required role: ${requiredRole}`);
+      return false;
+    }
+
+    // If user role is not in the hierarchy, deny access
+    if (!(userRole in roleHierarchy)) {
+      console.log(`Unknown user role: ${userRole}`);
+      return false;
+    }
+
+    // If no specific role is required, just check if user is authenticated
+    if (!requiredRole) {
+      console.log('No specific role required, access granted');
       return true;
     }
-    
-    // Subadmin has access to subadmin routes and below
-    if (user.role === 'subadmin' && requiredRole !== 'admin') {
-      console.log('User is subadmin, access granted');
-      return true;
-    }
-    
-    // For other roles, check if they match the required role
-    if (requiredRole === 'student' || requiredRole === 'user') {
-      console.log('User has student/user access');
-      return true; // All logged-in users have student/user access
-    }
-    
-    if (requiredRole === 'teacher' && user.role === 'teacher') {
-      console.log('User is teacher, access granted');
-      return true;
-    }
-    
-    // Check for exact role match
-    if (user.role === requiredRole) {
-      console.log('Exact role match, access granted');
-      return true;
-    }
-    
-    console.log('Role check failed', { 
-      userRole: user.role, 
+
+    // Check if user's role has sufficient privileges
+    const userLevel = roleHierarchy[userRole];
+    const requiredLevel = roleHierarchy[requiredRole];
+    const hasAccess = userLevel >= requiredLevel;
+
+    console.log('Role check:', {
+      userRole,
       requiredRole,
-      user,
-      location: window.location
+      userLevel,
+      requiredLevel,
+      hasAccess
     });
-    return false;
+
+    return hasAccess;
   };
 
   const roleCheck = hasRequiredRole();

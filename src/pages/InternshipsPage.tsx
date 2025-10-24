@@ -2,10 +2,15 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { toast } from 'react-toastify';
-import { Loader2, Briefcase, Search, Filter } from 'lucide-react';
+import { Loader2, Briefcase, Search, Filter, Star, Quote } from 'lucide-react';
 import { motion, AnimatePresence, useInView } from 'framer-motion';
 import InternshipCard from '../components/internships/InternshipCard';
+import Testimonials3D from '../components/internships/Testimonials3D';
 import { getAllInternships } from '../Services/internshipService';
+import { getTestimonials } from '../Services/testimonialService';
+
+// Import the Testimonial type from the service
+import type { Testimonial } from '../Services/testimonialService';
 
 export interface Internship {
   id: string;
@@ -41,7 +46,9 @@ const getCardImage = (imageUrl?: string) => {
 const InternshipsPage: React.FC = () => {
   // State hooks - must be called unconditionally at the top level
   const [internships, setInternships] = useState<Internship[]>([]);
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingTestimonials, setLoadingTestimonials] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedLevel, setSelectedLevel] = useState('all');
@@ -58,13 +65,19 @@ const InternshipsPage: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       setLoading(true);
+      setLoadingTestimonials(true);
       setError(null);
       
       try {
-        const fetchedInternships = await getAllInternships();
+        // Fetch both internships and testimonials in parallel
+        const [internshipsData, testimonialsData] = await Promise.all([
+          getAllInternships(),
+          getTestimonials()
+        ]);
         
-        if (fetchedInternships?.length > 0) {
-          const mappedInternships = fetchedInternships
+        if (internshipsData && internshipsData.length > 0) {
+          // Process and validate internships
+          const mappedInternships = internshipsData
             .filter(internship => {
               const isValid = internship.$id && /^[a-zA-Z0-9_]{1,36}$/.test(internship.$id);
               if (!isValid) {
@@ -80,26 +93,28 @@ const InternshipsPage: React.FC = () => {
           
           console.log('Mapped internships:', mappedInternships);
           setInternships(mappedInternships);
+          
+          // Set testimonials if available
+          if (testimonialsData) {
+            setTestimonials(testimonialsData);
+          } else {
+            setTestimonials([]);
+          }
         } else {
+          // No internships available
           setInternships([]);
+          setTestimonials(testimonialsData || []);
           toast.info('No internships available at the moment');
         }
-      } catch (err: unknown) {
-        let errorMessage = 'Failed to load internships. Please try again later.';
-        
-        if (err instanceof Error) {
-          errorMessage = err.message || errorMessage;
-        } else if (typeof err === 'string') {
-          errorMessage = err;
-        }
-        
-        setError(errorMessage);
-        toast.error(errorMessage);
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast.error('Failed to load data');
       } finally {
         setLoading(false);
+        setLoadingTestimonials(false);
       }
     };
-    
+
     fetchData();
   }, []);
   
@@ -148,6 +163,56 @@ const InternshipsPage: React.FC = () => {
       </div>
     );
   }
+
+  // Render Testimonial Card
+  const renderTestimonialCard = (testimonial: Testimonial) => (
+    <motion.div 
+      key={testimonial.id}
+      className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 h-full flex flex-col transition-all duration-300 hover:shadow-xl hover:-translate-y-1"
+      initial={{ opacity: 0, y: 20 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true }}
+      transition={{ duration: 0.5 }}
+    >
+      <div className="flex items-center mb-4">
+        <img 
+          src={testimonial.avatar} 
+          alt={testimonial.name}
+          className="w-12 h-12 rounded-full object-cover mr-4 border-2 border-primary-500"
+        />
+        <div>
+          <h4 className="font-semibold text-gray-900 dark:text-white">{testimonial.name}</h4>
+          <p className="text-sm text-gray-600 dark:text-gray-300">{testimonial.designation} at {testimonial.company}</p>
+        </div>
+      </div>
+      <div className="flex items-center mb-3">
+        {[...Array(5)].map((_, i) => (
+          <Star 
+            key={i} 
+            className={`w-4 h-4 ${i < testimonial.rating ? 'text-yellow-400 fill-current' : 'text-gray-300 dark:text-gray-600'}`} 
+          />
+        ))}
+      </div>
+      <Quote className="text-gray-400 dark:text-gray-500 w-6 h-6 mb-2" />
+      <p className="text-gray-600 dark:text-gray-300 mb-4 flex-grow">{testimonial.comment}</p>
+      <div className="mt-auto pt-4 border-t border-gray-100 dark:border-gray-700">
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="px-2 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200 rounded-full">
+            {testimonial.package}
+          </span>
+          <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200 rounded-full">
+            {testimonial.type}
+          </span>
+          <span className="px-2 py-1 bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200 rounded-full">
+            {testimonial.year}
+          </span>
+        </div>
+        <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+          {testimonial.district}, {testimonial.state}
+        </div>
+      </div>
+    </motion.div>
+  );
 
   // Render error state
   if (error) {
@@ -231,8 +296,21 @@ const InternshipsPage: React.FC = () => {
               </div>
             </div>
 
+            {/* Testimonials Section */}
+            {loadingTestimonials ? (
+            <div className="flex justify-center items-center py-12">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+          ) : testimonials.length > 0 ? (
+            <Testimonials3D testimonials={testimonials} />
+          ) : (
+            <div className="text-center py-12 text-gray-500">
+              No testimonials available at the moment.
+            </div>
+          )}
+
             {/* Main Content */}
-            <div className="container mx-auto px-4">
+            <div className="container mx-auto px-4 mt-12">
               {/* Filters */}
               <div className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
                 <div className="flex flex-wrap gap-2 mb-4">

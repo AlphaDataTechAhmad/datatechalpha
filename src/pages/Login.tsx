@@ -207,7 +207,7 @@ const LoginPage: React.FC = () => {
                   onClick={async () => {
                     try {
                       setResendStatus({ message: 'Sending verification email...' });
-                      const success = await sendVerification();
+                      const success = await sendVerification(formData.email);
                       if (success) {
                         setResendStatus({
                           success: true,

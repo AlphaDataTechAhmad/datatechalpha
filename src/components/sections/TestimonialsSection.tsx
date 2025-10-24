@@ -18,13 +18,6 @@ const testimonials = [
     image: "https://i.postimg.cc/wBVXqK6q/ret.jpg",
     text: "As someone transitioning from a different field, I was worried about keeping up. DATA-TECH's structured curriculum and supportive community made learning complex AI concepts accessible. The interactive 3D visualizations helped me understand neural networks intuitively.",
   },
-  {
-    id: 3,
-    name: "Rahul Sharma",
-    role: "",
-    image: "https://i.postimg.cc/vBn64pyx/1681933370647.jpg",
-    text: "DATA-TECH's Blockchain course stands out for its practical approach. Instead of just theory, we built actual DApps and smart contracts. The instructors are active in the industry and shared invaluable insights from their experience working on major crypto projects.",
-  }
 ];
 
 const TestimonialsSection: React.FC = () => {

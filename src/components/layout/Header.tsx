@@ -115,8 +115,7 @@ const Header: React.FC<HeaderProps> = ({ onToggleChat }) => {
     { title: 'Scholarship', path: '/scholarship' },
     { title: 'About', path: '/about' },
     { title: 'Practice Tests', path: '/testz' },
-    { title: 'Contact', path: '/contact' },
-    { title: 'Instructor', path: '/instructor' } // Added Instructor page for all users
+    { title: 'Contact', path: '/contact' }
   ];
 
   const teacherNavItems = [

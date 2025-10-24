@@ -50,6 +50,7 @@ export const updateClientSession = (sessionToken?: string) => {
 export const DATABASE_ID = "68261b6a002ba6c3b584";
 export const USER_COLLECTION_ID = "68261bbe00050e9a6cda";
 export const PROFILE_COLLECTION_ID = "68261bb5000a54d8652b";
+export const LIVE_CLASSES_COLLECTION_ID = "internship-live";
 export const TEACHER_IDS_COLLECTION_ID = "682c054e0029e175bc85";
 export const COURSES_COLLECTION_ID = "682644ed002b437582d3";
 export const TESTS_COLLECTION_ID = "686520c7001bd5bb53b3";
@@ -58,7 +59,7 @@ export const STORAGE_BUCKET_ID = "6826481d00212029492a"; // Appwrite Storage Buc
 
 // Initialize services
 export const account = new Account(client);
-export const databases = new Databases(client);
+export const databases = new Databases(client); 
 
 // Collection IDs
 export const NOTIFICATIONS_COLLECTION = '6853e351000f87a36c80';
@@ -66,6 +67,10 @@ export const USER_NOTIFICATIONS_COLLECTION = '6853e3fb00397e343bbb';
 
 export const CHAT_MESSAGES_COLLECTION = 'chat_messages';
 export const NOTIFICATIONS_COLLECTION_ID = NOTIFICATIONS_COLLECTION; // Alias for backward compatibility
+
+export const INTERNSHIPS_COLLECTION_ID = '6884925d00189c3d5816';
+export const INTERNSHIP_APPLICATIONS_COLLECTION_ID = '6884a2ca0003ae2e2fba';
+export const STATS_COLLECTION_ID = 'stats'; // Collection for storing application statistics
 
 // Type for session data
 export type Session = AppwriteModels.Session;
@@ -339,13 +344,32 @@ export const getUserProfile = async (accountId: string): Promise<Models.Document
   }
 };
 
-export const sendVerificationEmail = async (): Promise<boolean> => {
+export const sendVerificationEmail = async (email?: string): Promise<boolean> => {
   try {
-    await account.createVerification(`${window.location.origin}/verify-email`);
-    return true;
+    const verificationUrl = `${window.location.origin}/verify-email`;
+    
+    if (email) {
+      // For unauthenticated users, create a temporary session
+      try {
+        // First try to create a session
+        await account.createAnonymousSession();
+        // Then create the verification
+        await account.createVerification(verificationUrl, email);
+        // Delete the temporary session
+        await account.deleteSession('current');
+        return true;
+      } catch (sessionError) {
+        console.error('Error with temporary session:', sessionError);
+        throw new Error('Failed to send verification email. Please try logging in first.');
+      }
+    } else {
+      // For authenticated users
+      await account.createVerification(verificationUrl);
+      return true;
+    }
   } catch (error) {
     console.error("Error sending verification email:", error);
-    throw new Error("Failed to send verification email");
+    throw new Error("Failed to send verification email. Please try again later.");
   }
 };
 
@@ -516,11 +540,11 @@ export const createAccountWithVerification = async (
       isVerified: false,
       imageUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
       createdAt: new Date().toISOString(),
-      ...(teacherId && { teacherId }), // Include teacherId if provided
+      ...(teacherId && { teacherId }) // Include teacherId if provided
     };
 
     console.log('Creating profile document...');
-    await databases.createDocument(
+    const profile = await databases.createDocument(
       DATABASE_ID,
       PROFILE_COLLECTION_ID,
       ID.unique(),
@@ -532,6 +556,78 @@ export const createAccountWithVerification = async (
         Permission.read(Role.any()),
       ]
     );
+
+    // Update user account with profile ID if needed
+    try {
+      await account.updatePrefs(newAccount.$id, {
+        profileId: profile.$id,
+        role: role || 'student'
+      });
+    } catch (updateError) {
+      console.error('Failed to update user prefs with profile ID:', updateError);
+      // Continue even if this fails
+    }
+
+    // If this is a student, update the student count
+    if (role === 'student') {
+      try {
+        // First, try to get the stats document
+        let statsDoc;
+        try {
+          const statsResponse = await databases.listDocuments(
+            DATABASE_ID,
+            STATS_COLLECTION_ID,
+            [Query.limit(1)]
+          );
+          
+          if (statsResponse.documents.length > 0) {
+            statsDoc = statsResponse.documents[0];
+            // Update existing stats
+            await databases.updateDocument(
+              DATABASE_ID,
+              STATS_COLLECTION_ID,
+              statsDoc.$id,
+              {
+                totalStudents: (statsDoc.totalStudents || 0) + 1,
+                updatedAt: new Date().toISOString()
+              }
+            );
+          }
+        } catch (error) {
+          console.log('No existing stats document found, will create a new one');
+        }
+        
+        // If no stats document exists, create one
+        if (!statsDoc) {
+          try {
+            await databases.createDocument(
+              DATABASE_ID,
+              STATS_COLLECTION_ID,
+              ID.unique(),
+              {
+                totalStudents: 1,
+                totalTeachers: 0,
+                totalCourses: 0,
+                totalInternships: 0,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+              },
+              [
+                Permission.read(Role.any()),
+                Permission.update(Role.team('admins')),
+                Permission.update(Role.team('system')),
+                Permission.delete(Role.team('admins'))
+              ]
+            );
+          } catch (createError) {
+            console.error('Failed to create stats document:', createError);
+          }
+        }
+      } catch (statsError) {
+        console.error('Failed to update student count:', statsError);
+        // Continue even if stats update fails
+      }
+    }
 
     return newAccount;
   } catch (error) {

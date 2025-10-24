@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { account } from '../../Services/appwrite';
 import {
   Dialog,
   DialogTitle,
@@ -25,8 +26,9 @@ import {
 } from '@mui/material';
 import { CheckCircle } from '@mui/icons-material';
 import { toast } from 'react-toastify';
+import { ID, Query } from 'appwrite';
 import { databases } from '../../appwriteConfig';
-import { ID } from 'appwrite';
+import { DATABASE_ID, SCHOLARSHIP_APPLICATIONS_COLLECTION_ID } from '../../appwriteConfig';
 
 declare global {
   interface Window {
@@ -52,7 +54,7 @@ const states = [
   'Uttar Pradesh', 'Uttarakhand', 'West Bengal'
 ];
 
-const DEFAULT_PRICE = 89; // Default application fee
+const DEFAULT_PRICE = 11000; // Default application fee in INR
 
 const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
   open,
@@ -62,6 +64,7 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
   price = DEFAULT_PRICE,
   currency = 'INR',
 }) => {
+  // Account is already imported from appwrite service
   const [formData, setFormData] = useState({
     // Personal Information
     name: '',
@@ -91,6 +94,9 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
     internet: 'Yes',
     language: 'English',
     otherLanguage: '',
+    
+    // Referral
+    referal: '',
     
     // Scholarship Details
     scholarshipId: scholarshipId,
@@ -122,12 +128,22 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
     };
   }, []);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | { name?: string; value: unknown }>) => {
-    const { name, value } = e.target;
+  const handleChange = (e: React.ChangeEvent<{ name?: string; value: unknown }> | SelectChangeEvent<string>) => {
+    const { name, value } = e.target as { name: string; value: string };
+    
     setFormData(prev => ({
       ...prev,
-      [name as string]: value
+      [name]: value
     }));
+    
+    // Clear error for the field being edited
+    if (errors[name]) {
+      setErrors(prev => {
+        const newErrors = { ...prev };
+        delete newErrors[name];
+        return newErrors;
+      });
+    }
   };
 
   const handleNext = () => {
@@ -142,6 +158,15 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
 
   const validateStep = (step: number): boolean => {
     const newErrors: Record<string, string> = {};
+    
+    // Validate referral code if provided
+    if (step === 1 && formData.referal) {
+      if (!/^\d{10}$/.test(formData.referal)) {
+        newErrors.referal = 'Referral code must be a 10-digit mobile number';
+      } else if (formData.referal === formData.phone) {
+        newErrors.referal = 'You cannot refer yourself';
+      }
+    }
     
     if (step === 0) { // Personal Information
       if (!formData.name.trim()) newErrors.name = 'Full name is required';
@@ -308,15 +333,33 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
                 labelId="state-label"
                 id="state"
                 name="state"
-                value={formData.state}
+                value={formData.state || ''}
                 label="State *"
                 onChange={handleChange}
+                displayEmpty
+                inputProps={{ 'aria-label': 'Without label' }}
+                MenuProps={{
+                  PaperProps: {
+                    style: {
+                      maxHeight: 200,
+                    },
+                  },
+                }}
               >
+                <MenuItem value="">
+                  <em>Select a state</em>
+                </MenuItem>
                 {states.map((state) => (
-                  <MenuItem key={state} value={state}>{state}</MenuItem>
+                  <MenuItem key={state} value={state}>
+                    {state}
+                  </MenuItem>
                 ))}
               </Select>
-              {errors.state && <Typography color="error" variant="caption">{errors.state}</Typography>}
+              {errors.state && (
+                <Typography color="error" variant="caption">
+                  {errors.state}
+                </Typography>
+              )}
             </FormControl>
             <TextField
               margin="normal"
@@ -358,16 +401,27 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
             />
             <TextField
               margin="normal"
-              required
               fullWidth
               id="email"
-              label="Email ID (for exam login link)"
+              label="Email Address"
               name="email"
-              type="email"
               value={formData.email}
               onChange={handleChange}
               error={!!errors.email}
               helperText={errors.email}
+            />
+            <TextField
+              margin="normal"
+              fullWidth
+              id="referal"
+              label="Referral Code (Optional)"
+              name="referal"
+              placeholder="Referrer's mobile number"
+              value={formData.referal}
+              onChange={handleChange}
+              error={!!errors.referal}
+              helperText={errors.referal || "Enter referrer's 10-digit mobile number to earn referral points"}
+              inputProps={{ maxLength: 10, pattern: '\\d{10}' }}
             />
           </Box>
         );
@@ -421,8 +475,7 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
               value={formData.percentage}
               onChange={handleChange}
               error={!!errors.percentage}
-              helperText={errors.percentage}
-              placeholder="e.g., 85% or A+"
+              helperText={errors.percentage || "e.g., 85% or A+"}
             />
           </Box>
         );
@@ -522,6 +575,13 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
               <Typography>Mobile: {formData.phone}</Typography>
               <Typography>Email: {formData.email}</Typography>
               
+              {formData.referal && (
+                <>
+                  <Typography variant="subtitle1" sx={{ mt: 2 }} gutterBottom>Referral</Typography>
+                  <Typography>Referred by: {formData.referal}</Typography>
+                </>
+              )}
+              
               <Typography variant="subtitle1" sx={{ mt: 2 }} gutterBottom>Educational Details</Typography>
               <Typography>Class/Year: {formData.class}</Typography>
               <Typography>School/College: {formData.nameschoolcollege}</Typography>
@@ -535,7 +595,7 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
               
               <Divider sx={{ my: 2 }} />
               <Typography variant="h6" align="right">
-                Application Fee: {currency} {price.toFixed(2)}
+                Application Fee: {currency} 110.00
               </Typography>
             </Paper>
             
@@ -562,46 +622,96 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
     return true;
   };
 
-  const saveApplication = async (paymentId: string) => {
+  // Function to check and update referral points
+  const updateReferralPoints = async (referralPhone: string) => {
+    try {
+      // Find the referring student by phone number
+      const response = await databases.listDocuments(
+        DATABASE_ID,
+        SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+        [
+          Query.equal('phone', referralPhone)
+        ]
+      );
+
+      if (response.documents.length > 0) {
+        const referringStudent = response.documents[0];
+        const currentPoints = parseInt(referringStudent.referralPoints || '0');
+        
+        // Update the referring student's points
+        await databases.updateDocument(
+          DATABASE_ID,
+          SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+          referringStudent.$id,
+          {
+            referralPoints: (currentPoints + 1).toString()
+          }
+        );
+        
+        console.log(`Updated referral points for ${referringStudent.name} (${referringStudent.phone}) to ${currentPoints + 1}`);
+      }
+    } catch (error) {
+      console.error('Error updating referral points:', error);
+      // Don't fail the application if referral update fails
+    }
+  };
+
+  const saveApplication = async (paymentId: string, applicationData: any) => {
     try {
       const docId = ID.unique();
-      const applicationData = {
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email,
-        scholarshipId: formData.scholarshipId,
-        scholarshipTitle: formData.scholarshipTitle,
-        university: formData.boarduniversity, // Mapping to match collection
-        state: formData.state,
-        status: 'pending',
+      
+      // Prepare the full application data with payment ID
+      // Remove any fields that aren't in the schema
+      const { otherCategory, otherLanguage, applicationDate, ...restApplicationData } = applicationData;
+      // Ensure amount is a valid string
+      const amount = applicationData.amount ? String(applicationData.amount) : '0';
+      
+      const fullApplicationData: any = {
+        ...restApplicationData,
+        paymentId,
         appliedAt: new Date().toISOString(),
-        paymentId: paymentId,
-        amount: formData.amount,
-        currency: formData.currency,
-        fatherName: formData.fatherName,
-        DOB: formData.DOB,
-        gender: formData.gender,
-        category: formData.category,
-        Nationality: formData.Nationality,
-        Address: formData.Address,
-        district: formData.district,
-        pin: formData.pin,
-        class: formData.class,
-        nameschoolcollege: formData.nameschoolcollege,
-        boarduniversity: formData.boarduniversity,
-        percentage: formData.percentage,
-        deviceused: formData.deviceused,
-        internet: formData.internet,
-        language: formData.language === 'Other' ? formData.otherLanguage : formData.language
+        status: 'pending',
+        payment: false, // This is the boolean field for payment status
+        amount, // This is now a valid string
+        referralPoints: '0', // Initialize referral points
+        
+        // Required fields with defaults
+        name: applicationData.name || '',
+        phone: applicationData.phone || '',
+        email: applicationData.email || '',
+        scholarshipId: applicationData.scholarshipId || '',
+        district: applicationData.district || '',
+        fatherName: applicationData.fatherName || '',
+        DOB: applicationData.DOB || new Date().toISOString(),
+        gender: applicationData.gender || 'Other',
+        category: applicationData.category || 'General',
+        Nationality: applicationData.Nationality || 'Indian',
+        Address: applicationData.Address || '',
+        university: applicationData.university || '',
+        referal: applicationData.referal || '',
       };
 
-      await databases.createDocument(
-        '68261b6a002ba6c3b584', // Database ID
-        '68986fdc003214947765', // Scholarship collection ID
+      // If there's a referral code, update the referrer's points
+      if (applicationData.referal) {
+        await updateReferralPoints(applicationData.referal);
+      }
+
+      console.log('Creating new document with data:', {
+        databaseId: DATABASE_ID,
+        collectionId: SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
         docId,
-        applicationData
+        data: fullApplicationData
+      });
+
+      // Save to Appwrite
+      const result = await databases.createDocument(
+        DATABASE_ID,
+        SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+        docId,
+        fullApplicationData
       );
       
+      console.log('Document created successfully:', result);
       setApplicationId(docId);
       return docId;
     } catch (error) {
@@ -618,42 +728,160 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
     setPaymentProcessing(true);
 
     try {
+      // Prepare application data
+      const applicationData = {
+        ...formData,
+        scholarshipId,
+        scholarshipTitle,
+        userId: account?.$id,
+        amount: price,
+        currency: currency,
+        status: 'pending_payment',
+        applicationDate: new Date().toISOString()
+      };
+      
       // First save the application with a temporary payment ID
       const tempPaymentId = `temp_${Date.now()}`;
-      await saveApplication(tempPaymentId);
+      const docId = await saveApplication(tempPaymentId, applicationData);
       
       // Initialize Razorpay
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: price * 100, // Razorpay expects amount in paise
+        key: import.meta.env.VITE_PUBLIC_RAZORPAY_KEY_ID,
+        amount: Math.round(price * 11000), // Convert to paise (1 INR = 100 paise)
         currency: currency,
         name: 'Scholarship Application',
         description: `Payment for ${scholarshipTitle}`,
         order_id: undefined as string | undefined,
         handler: async function (response: any) {
+          const currentApplicationId = docId; // Use the captured docId
           try {
-            // Update the application with the actual payment ID
-            await databases.updateDocument(
-              '68261b6a002ba6c3b584',
-              '68986fdc003214947765',
-              applicationId,
-              {
+            console.log('Payment successful, updating application...');
+            console.log('Database ID:', DATABASE_ID);
+            console.log('Collection ID:', SCHOLARSHIP_APPLICATIONS_COLLECTION_ID);
+            console.log('Application ID:', currentApplicationId);
+            
+            if (!currentApplicationId) {
+              throw new Error('No application ID found');
+            }
+            
+            try {
+              // First try to get the current document
+              const currentDoc = await databases.getDocument(
+                DATABASE_ID,
+                SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+                currentApplicationId
+              );
+              
+              console.log('Current document:', currentDoc);
+              
+              // Update with all fields including the payment info
+              // Only include the fields we want to update
+              const updateData = {
                 paymentId: response.razorpay_payment_id,
-                status: 'paid'
+                status: 'paid',
+                payment: true
+                // Removed updatedAt as it's handled by Appwrite
+              };
+              
+              console.log('Update data:', updateData);
+              
+              try {
+                // Perform the update
+                const result = await databases.updateDocument(
+                  DATABASE_ID,
+                  SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+                  currentApplicationId,
+                  updateData
+                );
+                
+                console.log('Update successful:', result);
+                setPaymentSuccess(true);
+                toast.success('Payment successful! Your application has been submitted.');
+                
+                // Close the form after a delay
+                setTimeout(() => {
+                  onClose();
+                  // Reset form state if needed
+                  setActiveStep(0);
+                  setPaymentProcessing(false);
+                }, 2000);
+                
+                return result; // Return the updated document
+              
+              } catch (updateError) {
+                console.error('Error updating document:', updateError);
+                throw updateError; // Re-throw to be caught by the outer catch
               }
-            );
+            } catch (getDocError) {
+              console.log('Document not found, creating a new one...');
+              // Continue to create a new document
+            }
+
+            // Create a new document if update fails or no document exists
+            try {
+              console.log('Attempting to create new document with fresh ID...');
+              const newDocId = ID.unique();
+              
+              // Get current user
+              const currentUser = await account.get();
+              if (!currentUser) {
+                throw new Error('User not authenticated');
+              }
+              
+              // Remove any undefined or invalid fields
+              const { otherCategory, otherLanguage, applicationDate, ...validFormData } = formData;
+              
+              // Ensure amount is a valid string
+              const amount = formData.amount ? String(formData.amount) : '0';
+              
+              // Prepare document data with all required fields
+              const createData = {
+                // Required fields with defaults
+                name: validFormData.name || '',
+                phone: validFormData.phone || '',
+                email: validFormData.email || '',
+                scholarshipId: validFormData.scholarshipId || scholarshipId,
+                district: validFormData.district || '',
+                state: validFormData.state || '', // Make sure state is included
+                
+                // Personal details
+                fatherName: validFormData.fatherName || '',
+                DOB: validFormData.DOB || new Date().toISOString(),
+                gender: validFormData.gender || 'Other',
+                category: validFormData.category || 'General',
+                nationality: validFormData.Nationality || 'Indian',
+                address: validFormData.Address || '',
+                school: validFormData.nameschoolcollege || '',
+                university: validFormData.boarduniversity || '',
+                amount: amount,
+                currency: validFormData.currency || 'INR',
+                status: 'pending',
+                payment: false,
+                userId: currentUser.$id, // Use the current user's ID
+                paymentId: response.razorpay_payment_id || '',
+                // Add any other required fields from your schema
+              };
+
+              console.log('Creating new document with data:', createData);
+              
+              // Save the document to the database
+              const result = await databases.createDocument(
+                DATABASE_ID,
+                SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+                newDocId,
+                createData
+              );
+              
+              console.log('New document created successfully:', result);
+              setApplicationId(newDocId);
+              setPaymentSuccess(true);
+              return result; // Return the created document
+            } catch (createError) {
+              console.error('Failed to create document:', createError);
+              throw createError; // Re-throw to be caught by the outer catch
+            }
             
-            setPaymentSuccess(true);
-            toast.success('Payment successful! Your application has been submitted.');
-            
-            // Close the form after a delay
-            setTimeout(() => {
-              onClose();
-              // Reset form state if needed
-              setActiveStep(0);
-              setPaymentProcessing(false);
-            }, 2000);
-            
+            // Success handling is now done in the respective successful update/create blocks
           } catch (error) {
             console.error('Error updating payment status:', error);
             toast.error('Payment successful but failed to update application status. Please contact support.');
@@ -676,13 +904,27 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
         // Handle payment failure
         rzp.on('payment.failed', async function (response: any) {
           try {
+            if (!currentApplicationId) {
+              console.error('No application ID available for failed payment');
+              return;
+            }
+            // Get the current document first to preserve existing fields
+            const currentDoc = await databases.getDocument(
+              DATABASE_ID,
+              SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+              currentApplicationId
+            );
+            
             await databases.updateDocument(
-              '68261b6a002ba6c3b584',
-              '68986fdc003214947765',
-              applicationId,
+              DATABASE_ID,
+              SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+              currentApplicationId,
               {
+                ...currentDoc, // Include all existing fields
+                payment: false,
                 status: 'payment_failed',
-                paymentError: response.error.description
+                paymentError: response.error.description,
+                updatedAt: new Date().toISOString()
               }
             );
             toast.error('Payment failed. Please try again.');
@@ -792,43 +1034,116 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
     if (!validateForm()) {
       return;
     }
+    
+    // Add scholarshipId and userId to form data
+    const applicationData = {
+      ...formData,
+      // Required fields from form data
+      name: formData.name,
+      phone: formData.phone,
+      email: formData.email,
+      university: formData.boarduniversity || 'Not specified',
+      state: formData.state,
+      fatherName: formData.fatherName,
+      DOB: formData.DOB,
+      gender: formData.gender,
+      category: formData.category,
+      Nationality: formData.Nationality,
+      Address: formData.Address,
+      district: formData.district,
+      pin: formData.pin,
+      class: formData.class,
+      nameschoolcollege: formData.nameschoolcollege,
+      boarduniversity: formData.boarduniversity,
+      percentage: formData.percentage,
+      deviceused: formData.deviceused,
+      internet: formData.internet,
+      language: formData.language,
+      
+      // System fields
+      scholarshipId,
+      scholarshipTitle,
+      userId: account?.$id,
+      status: 'pending_payment',
+      applicationDate: new Date().toISOString(),
+      paymentStatus: 'pending',
+      payment: false,
+      amount: price,
+      currency: currency,
+      appliedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      paymentId: '',
+      createdAt: new Date().toISOString()
+    };
 
     setLoading(true);
     
     try {
-      // First save the application
-      const paymentId = 'pay_' + Date.now();
-      await saveApplication(paymentId);
+      // First save the application to get the document ID
+      const docId = await saveApplication('temp_' + Date.now(), applicationData);
       
-      // Initialize Razorpay payment
+      // Store docId in state for later use
+      setApplicationId(docId);
+      
+      // Initialize Razorpay options
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID,
-        amount: price * 100, // Razorpay expects amount in paise
+        key: import.meta.env.VITE_PUBLIC_RAZORPAY_KEY_ID,
+        amount: price * 11000, // Convert to paise
         currency: currency,
-        name: 'Scholarship Program',
-        description: `Payment for ${scholarshipTitle} Application`,
-        image: '/logo192.png', // Your logo
-        order_id: undefined as string | undefined, // Will be set after creating order
+        name: `Scholar's Edge - ${scholarshipTitle}`,
+        description: 'Scholarship Application Fee',
+        order_id: undefined, // Will be set after creating order
         handler: async function (response: any) {
           try {
             // Update payment status on success
             await databases.updateDocument(
-              '68261b6a002ba6c3b584',
-              '68986fdc003214947765',
-              applicationId,
+              DATABASE_ID,
+              SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+              docId,
               {
-                payment_id: response.razorpay_payment_id,
-                payment_status: 'completed',
-                status: 'submitted'
+                payment: true,
+                status: 'paid',
+                paymentId: response.razorpay_payment_id,
+                paymentStatus: 'completed',
+                updatedAt: new Date().toISOString()
               }
             );
+
+            // Trigger the email confirmation function
+            try {
+              await functions.createExecution(
+                '68b98ba90028773bd16d',
+                JSON.stringify({
+                  studentName: formData.name,
+                  email: formData.email,
+                  scholarshipName: scholarshipTitle,
+                  applicationId: docId,
+                  paymentId: response.razorpay_payment_id
+                })
+              );
+              console.log('Confirmation email triggered successfully');
+            } catch (emailError) {
+              console.error('Error triggering email function:', emailError);
+              toast.warning('Payment successful, but there was an issue sending the confirmation email.');
+            }
+            
+            // Update referral points if referral code exists
+            if (formData.referal) {
+              try {
+                await updateReferralPoints(formData.referal);
+                console.log('Referral points updated successfully');
+              } catch (referralError) {
+                console.error('Error updating referral points:', referralError);
+              }
+            }
             
             setPaymentSuccess(true);
-            toast.success('Payment successful! Your application has been submitted.');
-            onClose();
+            toast.success('Payment successful! Confirmation email has been sent.');
+            onClose(true);
           } catch (error) {
             console.error('Error updating payment status:', error);
             toast.error('Payment successful but failed to update application status. Please contact support.');
+            onClose(true);
           }
         },
         prefill: {
@@ -837,11 +1152,12 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
           contact: formData.phone,
         },
         notes: {
+          application_id: docId,
           scholarship_id: scholarshipId,
           scholarship_title: scholarshipTitle,
         },
         theme: {
-          color: '#3399cc',
+          color: '#4f46e5',
         },
       };
 
@@ -852,12 +1168,14 @@ const ScholarshipApplicationForm: React.FC<ScholarshipApplicationFormProps> = ({
         rzp.on('payment.failed', async function (response: any) {
           try {
             await databases.updateDocument(
-              '68261b6a002ba6c3b584',
-              '68986fdc003214947765',
-              applicationId,
+              DATABASE_ID,
+              SCHOLARSHIP_APPLICATIONS_COLLECTION_ID,
+              docId,
               {
-                payment_status: 'failed',
-                status: 'payment_failed'
+                payment: false,
+                status: 'payment_failed',
+                paymentStatus: 'failed',
+                updatedAt: new Date().toISOString()
               }
             );
             toast.error('Payment failed. Please try again.');

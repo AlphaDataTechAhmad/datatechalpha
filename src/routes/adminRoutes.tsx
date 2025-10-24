@@ -10,6 +10,8 @@ import ExamRegistrationsTest from '@/pages/admin/ExamRegistrationsTest';
 import TestsAdmin from '@/pages/admin/TestsAdmin';
 import DebugAuth from '@/pages/admin/DebugAuth';
 import InternExams from '@/pages/admin/InternExams';
+import TestimonialsPage from '@/pages/admin/TestimonialsPage';
+import Testimonials from '@/pages/admin/Testimonials';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 
 const adminRoutes: RouteObject[] = [
@@ -60,6 +62,14 @@ const adminRoutes: RouteObject[] = [
       {
         path: 'intern-exams',
         element: <InternExams />,
+      },
+      {
+        path: 'testimonials',
+        element: <TestimonialsPage />,
+      },
+      {
+        path: 'testimonials/manage',
+        element: <Testimonials />,
       },
     ],
   },

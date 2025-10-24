@@ -5,10 +5,13 @@ import Preloader from './ui/Preloader';
 
 interface ProtectedRouteProps {
   children: ReactNode | ((props: { isAuthenticated: boolean }) => ReactNode);
-  requiredRole?: 'admin' | 'subadmin' | 'teacher' | 'user';
+  requiredRole?: 'admin' | 'subadmin' | 'teacher' | 'student' | 'user' | 'testconductor';
 }
 
-const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole }) => {
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
+  children, 
+  requiredRole
+}) => {
   const { 
     isAuthenticated, 
     isLoading, 
@@ -30,21 +33,38 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
   // Check if user has the required role
   const hasRequiredRole = useCallback(() => {
     if (!requiredRole) return true; // No role required
-    if (!user?.role) return false; // User has no role
     
-    // Role hierarchy: admin > subadmin > teacher > user
-    const roleHierarchy = {
-      'admin': 4,
-      'subadmin': 3,
-      'teacher': 2,
-      'user': 1
+    // If user has no role, default to 'user' for backward compatibility
+    const userRole = user?.role || 'user';
+    
+    console.log('[ProtectedRoute] Checking role access:', {
+      requiredRole,
+      userRole,
+      isAuthenticated
+    });
+    
+    // Role hierarchy: admin > subadmin > teacher > testconductor > student > user
+    const roleHierarchy: Record<string, number> = {
+      admin: 5,
+      subadmin: 4,
+      teacher: 3,
+      testconductor: 2,
+      student: 1,
+      user: 0
     };
     
-    const userRoleLevel = roleHierarchy[user.role] || 0;
-    const requiredRoleLevel = roleHierarchy[requiredRole] || 0;
+    const userRoleLevel = roleHierarchy[userRole] ?? 0;
+    const requiredRoleLevel = roleHierarchy[requiredRole] ?? 0;
     
-    return userRoleLevel >= requiredRoleLevel;
-  }, [requiredRole, user]);
+    // User has access if their role level is >= required role level
+    const hasAccess = userRoleLevel >= requiredRoleLevel;
+    
+    if (!hasAccess) {
+      console.warn(`[ProtectedRoute] Access denied. Required role: ${requiredRole}, User role: ${userRole}`);
+    }
+    
+    return hasAccess;
+  }, [requiredRole, user, isAuthenticated]);
 
   // Handle redirects and role checks
   useEffect(() => {
@@ -69,10 +89,18 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRole 
         state: { from: location.pathname },
         replace: true 
       });
-    } else if (requiredRole && !hasRequiredRole()) {
-      console.log(`[ProtectedRoute] User doesn't have required role: ${requiredRole}`);
-      // Redirect to home page if user doesn't have the required role
-      navigate('/', { replace: true });
+    } else if (requiredRole) {
+      // For internship dashboard, allow access if user is authenticated
+      if (location.pathname.includes('/internships/') && location.pathname.includes('/dashboard')) {
+        console.log('[ProtectedRoute] Allowing access to internship dashboard for authenticated user');
+        return;
+      }
+      
+      if (!hasRequiredRole()) {
+        console.log(`[ProtectedRoute] User doesn't have required role: ${requiredRole}`);
+        // Redirect to home page if user doesn't have the required role
+        navigate('/', { replace: true });
+      }
     }
   }, [isInitialized, isAuthenticated, navigate, location.pathname, requiredRole, hasRequiredRole]);
 

@@ -1,0 +1,15 @@
+{
+  "name": "send-sms-function",
+  "version": "1.0.0",
+  "description": "Twilio SMS sending function for Appwrite",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "twilio": "^4.23.0"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

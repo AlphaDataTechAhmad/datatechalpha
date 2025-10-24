@@ -53,7 +53,7 @@ const BannerSlider: React.FC = () => {
         >
           <div className="relative w-full h-[50px] sm:h-[80px] md:h-[220px] lg:h-[80px] xl:h-[320px] overflow-hidden">
             <img
-              src="https://iili.io/Fvu0YdP.png"
+              src="https://i.ibb.co/wZ6FwDP4/tech.png"
               alt="Special Offer - Enroll Now"
               className="w-full h-full object-cover"
               loading="eager"
@@ -61,7 +61,7 @@ const BannerSlider: React.FC = () => {
           </div>
           <div className="relative w-full h-[50px] sm:h-[80px] md:h-[220px] lg:h-[80px] xl:h-[320px] overflow-hidden">
             <img
-              src="https://iili.io/FvAwfst.png"
+              src="https://i.ibb.co/wZ6FwDP4/tech.png"
               alt="Special Offer - Enroll Now"
               className="w-full h-full object-cover"
               loading="eager"

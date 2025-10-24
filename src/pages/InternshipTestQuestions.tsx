@@ -1,9 +1,12 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useContext } from 'react';
+import { Account } from 'appwrite';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { databases, DATABASE_ID } from '@/appwriteConfig';
+import { databases, DATABASE_ID, client } from '@/appwriteConfig';
 import { Loader2, ArrowLeft, Clock, Check, X } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Moon, Sun } from 'lucide-react';
+import { Functions } from 'appwrite';
+import { toast } from 'sonner';
 
 const SmallThemeToggle = () => {
   const { theme, toggleTheme } = useTheme();
@@ -303,6 +306,83 @@ const InternshipTestQuestions = () => {
     handleNextQuestion();
   };
 
+  // Function to send test result email
+  const sendTestResultEmail = async (testResult: any) => {
+    try {
+      const functions = new Functions(client);
+      
+      // Prepare the payload with all required fields including testId
+      const payload = {
+        testId: testResult.testId,
+        email: testResult.userEmail,
+        name: testResult.userName,
+        testName: testResult.testName || 'Internship Test',
+        score: testResult.score,
+        totalMarks: testResult.totalMarks,
+        percentage: testResult.percentage,
+        passed: testResult.passed
+      };
+      
+      console.log('Sending test result with payload:', JSON.stringify(payload, null, 2));
+      
+      const response = await functions.createExecution(
+        '68e25ded00193fabd29b',
+        JSON.stringify(payload)
+      );
+      
+      console.log('Email function execution result:', response);
+      return response;
+    } catch (error) {
+      console.error('Error sending test result email:', error);
+      throw error;
+    }
+  };
+
+  // Function to send SMS notification
+const sendSMSNotification = async (testResult: any) => {
+  try {
+    const functions = new Functions(client);
+    
+    // Prepare the message based on test result and percentage
+    let message = '';
+    
+    if (testResult.percentage >= 90) {
+      // For students who scored 90% or above
+      message = `Dear ${testResult.userName}, your Pre-Exam result: passed, Score: ${testResult.score}/${testResult.totalMarks} (${testResult.percentage}%). Congratulations! You are Qualified and directly eligible for the Technical Test. Click Here for Schedule your Technical Test (https://datatechalpha.com/internships)`;
+    } else {
+      // For students who scored below 90%
+      message = `Dear ${testResult.userName}, your Pre-Exam result: failed, Score: ${testResult.score}/${testResult.totalMarks} (${testResult.percentage}%). Congratulations! You are not Qualified. Unfortunately, you have not qualified in the Pre-Exam. However, you still have an opportunity to become eligible for the upcoming Technical Test (Coding Test).
+
+To qualify, you are required to complete a 20-day training program, which includes:
+
+10 days of Theory Lectures
+10 days of Project Work
+
+Upon successful completion of this training, you will be eligible to appear for the Technical Test.
+Click Here for Enroll training (https://datatechalpha.com/internships)
+We encourage you to take this opportunity to strengthen your skills and continue your journey toward success.`;
+    }
+    
+    const payload = {
+      to: testResult.phone,
+      message: message
+    };
+    
+    console.log('Sending SMS with payload:', JSON.stringify(payload, null, 2));
+    
+    const response = await functions.createExecution(
+      '68e75d6d001a88114165', // SMS function ID
+      JSON.stringify(payload)
+    );
+    
+    console.log('SMS function execution result:', response);
+    return response;
+  } catch (error) {
+    console.error('Error sending SMS notification:', error);
+    throw error;
+  }
+};
+
   const handleSubmitTest = async () => {
     if (!testData) {
       console.error('No test data available');
@@ -316,28 +396,203 @@ const InternshipTestQuestions = () => {
     setIsSubmitting(true);
 
     try {
-      // Calculate score by iterating through all questions in all sections
+      const urlParams = new URLSearchParams(window.location.search);
+      const userEmail = urlParams.get('email') || 'candidate@example.com';
+      const userName = urlParams.get('name') || 'Candidate';
+      const userId = urlParams.get('userId') || 'unknown-user';
+
       let score = 0;
       let maxScore = 0;
       let correctAnswers = 0;
       let totalQuestions = 0;
-      
-      testData.sections.forEach(section => {
-        section.questions.forEach(question => {
-          maxScore += question.points || 1;
+      let answeredQuestions = 0;
+
+      // Calculate score and prepare submission data
+      for (const section of testData.sections) {
+        for (const question of section.questions) {
+          const points = question.points || 1;
+          maxScore += points;
           totalQuestions++;
           
           // Only count the score if an answer was provided
-          if (answers[question.id] !== undefined && answers[question.id] !== null) {
-            // Check if the answer is correct
-            if (question.correctAnswer && answers[question.id] === question.correctAnswer) {
-              score += question.points || 1;
-              correctAnswers++;
+          const userAnswer = answers[question.id];
+          if (userAnswer !== undefined && userAnswer !== null) {
+            answeredQuestions++;
+            
+            // Handle both numeric indices and direct string answers
+            const correctAnswer = question.correctAnswer;
+            let isCorrect = false;
+            
+            if (correctAnswer !== undefined && correctAnswer !== null) {
+              // If correctAnswer is a number, treat it as an index into the options array
+              if (typeof correctAnswer === 'number' && question.options) {
+                const correctOption = question.options[correctAnswer];
+                isCorrect = userAnswer.trim().toLowerCase() === correctOption?.toString().trim().toLowerCase();
+              } 
+              // Otherwise, do a direct string comparison
+              else {
+                isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toString().trim().toLowerCase();
+              }
+              
+              if (isCorrect) {
+                score += points;
+                correctAnswers++;
+              }
             }
           }
-        });
+        }
+      }
+
+      // Calculate percentage based on correct answers
+      const percentage = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
+      const passed = percentage >= (testData.passingScore || 60);
+      const scoreString = score.toString();
+      const completedAt = new Date().toISOString();
+      const status = passed ? 'passed' : 'failed';
+      const percentageStr = percentage.toString();
+      
+      console.log('Test results:', {
+        testId,
+        score,
+        maxScore,
+        percentage,
+        passed,
+        correctAnswers,
+        totalQuestions,
+        fieldsToUpdate: {
+          is_used: true,
+          score: scoreString,
+          status: status,
+          completed_at: completedAt,
+          passed: passed,
+          percentage: percentageStr,
+          $updatedAt: completedAt
+        }
       });
 
+      // Update test results in the database with all required fields
+      const updateData = {
+        is_used: true,
+        score: scoreString,
+        status: status,
+        completed_at: completedAt,
+        passed: passed,
+        percentage: percentageStr
+      };
+      
+      console.log('Attempting to update document with:', updateData);
+      
+      const result = await databases.updateDocument(
+        DATABASE_ID,
+        INTERNSHIP_TEST_LINKS_COLLECTION,
+        testId,
+        updateData
+      );
+
+      console.log('Document update successful:', result);
+      
+      // Send email notification
+      try {
+        await sendTestResultEmail({
+          userEmail,
+          userName,
+          testName: testData.title,
+          score,
+          totalMarks: totalQuestions,
+          percentage,
+          passed,
+          testId,
+          userId
+        });
+        toast.success('Test submitted successfully! Results have been emailed to you.');
+        
+        // Send SMS notification if phone number is available
+        if (result.phone) {
+          try {
+            await sendSMSNotification({
+              userName,
+              testName: testData.title,
+              score,
+              totalMarks: totalQuestions,
+              percentage,
+              passed,
+              phone: result.phone,
+              testId
+            });
+            console.log('SMS notification sent successfully');
+          } catch (smsError) {
+            console.error('Failed to send SMS notification:', smsError);
+            // Don't show error to user, just log it
+          }
+        } else {
+          console.log('No phone number available for SMS notification');
+        }
+      } catch (emailError) {
+        console.error('Email sending failed:', emailError);
+        toast.success('Test submitted successfully!');
+      }
+      
+      setShowThankYou(true);
+      
+    } catch (error) {
+      console.error('Error submitting test:', error);
+      toast.error('Failed to submit test. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!testData) {
+      console.error('No test data available');
+      return;
+    }
+    
+    console.log('=== Starting test submission ===');
+    console.log('Test ID:', testId);
+    console.log('Test data:', testData);
+    
+    setIsSubmitting(true);
+
+    try {
+      // Calculate score and prepare submission data
+      // ... existing submission code ...
+      
+      // Use for...of loops for proper async/await handling
+      for (const section of testData.sections) {
+        for (const question of section.questions) {
+          const points = question.points || 1;
+          maxScore += points;
+          totalQuestions++;
+          
+          // Only count the score if an answer was provided
+          const userAnswer = answers[question.id];
+          if (userAnswer !== undefined && userAnswer !== null) {
+            answeredQuestions++;
+            
+            // Handle both numeric indices and direct string answers
+            const correctAnswer = question.correctAnswer;
+            let isCorrect = false;
+            
+            if (correctAnswer !== undefined && correctAnswer !== null) {
+              // If correctAnswer is a number, treat it as an index into the options array
+              if (typeof correctAnswer === 'number' && question.options) {
+                const correctOption = question.options[correctAnswer];
+                isCorrect = userAnswer.trim().toLowerCase() === correctOption?.toString().trim().toLowerCase();
+              } 
+              // Otherwise, do a direct string comparison
+              else {
+                isCorrect = userAnswer.trim().toLowerCase() === correctAnswer.toString().trim().toLowerCase();
+              }
+              
+              if (isCorrect) {
+                score += points;
+                correctAnswers++;
+              }
+            }
+          }
+        }
+      }
       // Calculate percentage based on correct answers
       const percentage = totalQuestions > 0 ? Math.round((correctAnswers / totalQuestions) * 100) : 0;
       const passed = percentage >= testData.passingScore;
@@ -373,8 +628,7 @@ const InternshipTestQuestions = () => {
         status: status,
         completed_at: completedAt,
         passed: passed,
-        percentage: percentageStr,
-        $updatedAt: completedAt
+        percentage: percentageStr
       };
       
       console.log('Attempting to update document with:', updateData);

@@ -1,10 +1,9 @@
-export type UserRole = 'user' | 'teacher' | 'admin' | 'subadmin';
+export type UserRole = 'admin' | 'subadmin' | 'teacher' | 'testconductor' | 'student' | 'user';
 
 export interface SubAdminPermissions {
   videoReview: boolean;
   notesReview: boolean;
   teacherManagement: boolean;
-  studentManagement: boolean;
   reelsManagement: boolean;
 }
 
@@ -26,4 +25,12 @@ export interface User {
   is_active?: boolean;
   status?: 'active' | 'suspended' | 'pending';
   subAdminPermissions?: SubAdminPermissions;
+  testConductorPermissions?: TestConductorPermissions;
+}
+
+export interface TestConductorPermissions {
+  canCreateTests: boolean;
+  canGradeTests: boolean;
+  canManageTestSessions: boolean;
+  canViewAllResults: boolean;
 }

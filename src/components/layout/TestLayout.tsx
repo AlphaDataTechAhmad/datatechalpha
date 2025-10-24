@@ -15,22 +15,39 @@ const TestLayout: React.FC<TestLayoutProps> = ({ children }) => {
   useEffect(() => {
     console.log('TestLayout - Current path:', location.pathname);
     
-    // Add test-mode class to body when component mounts
-    document.body.classList.add('test-mode');
+    // Hide header and footer elements
+    const header = document.querySelector('header');
+    const footer = document.querySelector('footer');
+    const mainContent = document.querySelector('main');
     
-    // Clean up function to remove the class when component unmounts
+    if (header) header.style.display = 'none';
+    if (footer) footer.style.display = 'none';
+    if (mainContent) mainContent.style.padding = '0';
+    
+    // Add test-mode class to body for additional styling
+    document.body.classList.add('test-mode');
+    document.body.style.margin = '0';
+    document.body.style.padding = '0';
+    
+    // Cleanup function to restore original state
     return () => {
+      if (header) header.style.display = '';
+      if (footer) footer.style.display = '';
+      if (mainContent) mainContent.style.padding = '';
       document.body.classList.remove('test-mode');
+      document.body.style.margin = '';
+      document.body.style.padding = '';
     };
   }, [location]);
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
-      <main className="min-h-screen p-4">
-        <div className="max-w-6xl mx-auto">
-          {children}
-        </div>
-      </main>
+    <div className="test-layout" style={{
+      minHeight: '100vh',
+      width: '100%',
+      display: 'flex',
+      flexDirection: 'column'
+    }}>
+      {children}
     </div>
   );
 };

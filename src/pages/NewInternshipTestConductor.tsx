@@ -76,7 +76,8 @@ interface TestData {
 
 interface TestLink {
   $id: string;
-  userId: string;
+  user_id: string;  // Changed from userId to user_id to match database
+  userId?: string;  // Keep for backward compatibility
   internship_id: string;
   start_date: string;
   expiry_date: string;
@@ -135,10 +136,11 @@ const NewInternshipTestConductor = () => {
         console.log('Retrieved test link:', link);
         
         // If user is authenticated, verify they are the test taker
-        if (isAuthenticated && user?.accountId !== link.userId) {
+        const testLinkUserId = link.user_id || link.userId; // Handle both formats
+        if (isAuthenticated && user?.$id !== testLinkUserId) {
           console.log('User ID mismatch:', { 
-            testLinkUserId: link.userId, 
-            currentUserAccountId: user?.accountId,
+            testLinkUserId: testLinkUserId,
+            currentUserId: user?.$id,
             testLinkData: link
           });
           setError('You are not authorized to take this test. Please ensure you are logged in with the correct account.');

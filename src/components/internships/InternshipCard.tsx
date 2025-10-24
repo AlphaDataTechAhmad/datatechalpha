@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Briefcase, Clock, CheckCircle, XCircle, ExternalLink } from 'lucide-react';
+import { Briefcase, Clock, CheckCircle, ExternalLink } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { databases } from '../../appwriteConfig';
 import { DATABASE_ID } from '../../appwriteConfig';
@@ -17,6 +17,9 @@ interface Internship {
   testResult?: 'pass' | 'fail' | null;
   testScheduled?: boolean;
   paymentStatus?: 'pending' | 'completed';
+  percentage?: number;
+  duration?: string;
+  level?: string;
 }
 
 const TEST_LINKS_COLLECTION_ID = '689923bc000f2d15a263';
@@ -26,7 +29,7 @@ const InternshipCard: React.FC<{ internship: Internship }> = ({ internship }) =>
   const fallbackImage = 'https://images.unsplash.com/photo-1499750310107-5fef28a66643?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1000&q=80';
   const [imageError, setImageError] = useState(false);
   const [isImageLoading, setIsImageLoading] = useState(true);
-  const [status, setStatus] = useState<'not_scheduled' | 'scheduled' | 'passed' | 'failed' | 'enrolled'>('not_scheduled');
+  const [status, setStatus] = useState<'not_scheduled' | 'scheduled' | 'passed' | 'passed_high_score' | 'failed' | 'enrolled'>('not_scheduled');
   const { user } = useAuth();
 
   // Memoize the image URL to prevent unnecessary re-renders
@@ -37,6 +40,12 @@ const InternshipCard: React.FC<{ internship: Internship }> = ({ internship }) =>
   // Check application and exam status on component mount
   useEffect(() => {
     const checkStatus = async () => {
+      // If payment is completed, set status to enrolled
+      if (internship.paymentStatus === 'completed') {
+        setStatus('enrolled');
+        return;
+      }
+
       if (!user) return;
 
       try {
@@ -68,18 +77,20 @@ const InternshipCard: React.FC<{ internship: Internship }> = ({ internship }) =>
         console.log('Test link found:', testLink);
 
         if (testLink) {
+          // Check if percentage is available and >= 90
+          const hasHighScore = testLink.percentage !== undefined && testLink.percentage >= 90;
+          
           if (testLink.passed === true) {
-            setStatus('passed');
+            if (hasHighScore) {
+              setStatus('passed_high_score');
+            } else {
+              setStatus('passed');
+            }
           } else if (testLink.passed === false) {
             setStatus('failed');
           } else {
             setStatus('scheduled');
           }
-        }
-
-        // Check if enrolled (payment completed)
-        if (internship.paymentStatus === 'completed') {
-          setStatus('enrolled');
         }
       } catch (error) {
         console.error('Error checking test status:', error);
@@ -112,6 +123,18 @@ const InternshipCard: React.FC<{ internship: Internship }> = ({ internship }) =>
           </Link>
         );
       case 'passed':
+        // For students who passed but with score < 90%
+        return (
+          <Link
+            to={`/internships/${internship.id}`}
+            className="w-full inline-flex items-center justify-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors"
+          >
+            <Briefcase className="w-4 h-4 mr-2" />
+            Enroll Now
+          </Link>
+        );
+      case 'passed_high_score':
+        // For students who passed with score >= 90%
         return (
           <Link
             to={`/internships/${internship.id}`}
@@ -128,17 +151,17 @@ const InternshipCard: React.FC<{ internship: Internship }> = ({ internship }) =>
             className="w-full inline-flex items-center justify-center px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg transition-colors"
           >
             <ExternalLink className="w-4 h-4 mr-2" />
-            Open Internship
+            Continue Studying
           </Link>
         );
       case 'failed':
         return (
           <Link
             to={`/internships/${internship.id}`}
-            className="w-full inline-flex items-center justify-center px-4 py-2 bg-red-600 hover:bg-red-700 text-white font-medium rounded-lg transition-colors"
+            className="w-full inline-flex items-center justify-center px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white font-medium rounded-lg transition-colors"
           >
-            <XCircle className="w-4 h-4 mr-2" />
-            Re-Apply
+            <Briefcase className="w-4 h-4 mr-2" />
+            Enroll Now
           </Link>
         );
       default:
@@ -150,9 +173,9 @@ const InternshipCard: React.FC<{ internship: Internship }> = ({ internship }) =>
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden h-full flex flex-col border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-shadow duration-300">
       <div className="relative h-48 w-full bg-gray-100 dark:bg-gray-700 overflow-hidden">
         <Link to={`/internships/${internship.id}`} className="block w-full h-full">
-          {status === 'passed' && (
+          {(status === 'passed' || status === 'passed_high_score') && (
             <span className="absolute top-2 right-2 bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded-full">
-              Passed
+              {status === 'passed_high_score' ? 'High Scorer' : 'Passed'}
             </span>
           )}
           {status === 'failed' && (

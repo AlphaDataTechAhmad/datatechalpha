@@ -156,9 +156,9 @@ const ContactSection: React.FC = () => {
               <div>
                 <h4 className="font-bold text-lg">Visit Us</h4>
                 <p className="text-dark-500 dark:text-dark-300">
-                Block A Old sunny enclave<br />
-                sector - 125 Mohali, Chandigarh<br />
-                Chandigarh Pin - 140301
+                Uni tech Cyber Park<br />
+                Sector - 39<br />
+                Gurugram, Haryana - 122002
                 </p>
               </div>
             </div>
@@ -170,7 +170,7 @@ const ContactSection: React.FC = () => {
               <div>
                 <h4 className="font-bold text-lg">Call Us</h4>
                 <p className="text-dark-500 dark:text-dark-300">
-                  +91 8958640529<br />
+                  +91 9760010407<br />
                   Mon-SUN, 9am-6pm EST
                 </p>
               </div>

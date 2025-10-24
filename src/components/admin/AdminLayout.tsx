@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, BookOpen, Bell, Menu, X, Video, FileText, UserCog, Briefcase } from 'lucide-react';
+import { LayoutDashboard, Users, BookOpen, Bell, Menu, X, Video, FileText, UserCog, Briefcase, MessageSquare } from 'lucide-react';
 import Header from '../layout/Header';
 import { useChat } from '@/contexts/ChatContext';
 import ChatWindow from '../chat/ChatWindow';
@@ -108,6 +108,7 @@ const AdminLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) => 
   const navigation = [
     { name: 'Dashboard', to: '/admin', icon: LayoutDashboard },
     { name: 'Internships', to: '/admin/internships', icon: Briefcase },
+    { name: 'Testimonials', to: '/admin/testimonials', icon: MessageSquare },
     { name: 'Intern Exams', to: '/admin/intern-exams', icon: FileText },
     { name: 'Teachers', to: '/admin/teachers', icon: Users },
     { name: 'Students', to: '/admin/students', icon: Users },
@@ -201,7 +202,7 @@ const AdminLayout: React.FC<{ children?: React.ReactNode }> = ({ children }) => 
       </div>
 
       {/* Main content */}
-      <div className="flex-1 lg:pl-72 relative z-0 pt-24 lg:pt-24">
+      <div className="flex-1 lg:pl-72 relative z-0 pt-2 lg:pt-1">
         {/* Mobile top navigation */}
         <div className="sticky top-0 z-40 bg-white dark:bg-dark-800 pl-1 pt-1 sm:pl-3 sm:pt-3 lg:hidden">
           <button

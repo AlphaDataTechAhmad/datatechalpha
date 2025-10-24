@@ -1,0 +1,21 @@
+{
+    "name": "sendTestResultEmail",
+    "runtime": "node-18.0",
+    "timeout": 30,
+    "entrypoint": "index.js",
+    "execute": ["users", "emails.write"],
+    "events": [],
+    "schedule": "",
+    "variables": {
+      "SMTP_HOST": "smtp.hostinger.com",
+      "SMTP_PORT": "465",
+      "SMTP_USER": "hr@datatechalpha.com",
+      "SMTP_PASSWORD": "Param@123@@"
+    },
+    "dependencies": [
+      "dotenv",
+      "express",
+      "cors",
+      "node-appwrite"
+    ]
+  }

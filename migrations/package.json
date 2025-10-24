@@ -1,0 +1,17 @@
+{
+  "name": "migrations",
+  "version": "1.0.0",
+  "description": "This directory contains scripts to migrate data from Appwrite to AWS RDS (PostgreSQL).",
+  "main": "export-appwrite-data.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "node-appwrite": "^20.2.1"
+  }
+}
