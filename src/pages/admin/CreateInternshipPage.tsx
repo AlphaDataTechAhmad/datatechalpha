@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Internship } from '../internships/[slug]';
-import { createInternship } from '../../services/internshipAdminService';
+import { createInternship } from '../../Services/internshipAdminService';
 import { useAuth } from '../../contexts/AuthContext';
 
 const CreateInternshipPage: React.FC = () => {

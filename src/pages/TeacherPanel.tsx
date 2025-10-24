@@ -380,15 +380,6 @@ const TeacherPanel: React.FC = () => {
           </div>
         );
 
-      case 'students':
-        return (
-          <div className="bg-white dark:bg-dark-800 rounded-lg shadow overflow-hidden">
-            <div className="p-6">
-              <EnrolledStudents />
-            </div>
-          </div>
-        );
-
       default:
         return null;
     }

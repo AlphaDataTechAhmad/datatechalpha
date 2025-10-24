@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { databases, DATABASE_ID, INTERNSHIPS_COLLECTION_ID } from '../../appwriteConfig';
-import { updateInternship } from '../../services/internshipAdminService';
+import { updateInternship } from '../../Services/internshipAdminService';
 import { useAuth } from '../../contexts/AuthContext';
 import type { Internship } from '../internships/[slug]';
 
