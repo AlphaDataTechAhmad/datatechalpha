@@ -403,7 +403,6 @@ We encourage you to take this opportunity to strengthen your skills and continue
 
       let score = 0;
       let maxScore = 0;
-      let correctAnswers = 0;
       let totalQuestions = 0;
       let answeredQuestions = 0;
 

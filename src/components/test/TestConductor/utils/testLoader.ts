@@ -42,7 +42,27 @@ export const loadTestData = (testId: string): TestData | null => {
         console.log('Successfully loaded test data:', testData);
         
         // Transform the test data to match the TestData interface
+        const sections = testData.sections?.map((section: any, index: number) => ({
+          id: section.id || `section-${index + 1}`,
+          title: section.title || `Section ${index + 1}`,
+          description: section.description || '',
+          questionCount: section.questions?.length || 0,
+          questions: (section.questions || []).map((q: any, qIndex: number) => ({
+            id: q.id || `q-${index + 1}-${qIndex + 1}`,
+            question: q.question || 'Question text missing',
+            options: q.options || [],
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation,
+            marks: q.marks || 1,
+            sectionId: section.id || `section-${index + 1}`
+          }))
+        })) || [];
+
+        // For backward compatibility, include questions at the root level
+        const allQuestions = sections.flatMap(section => section.questions);
+
         return {
+          internshipId: testData.internshipId || '', // Required by interface
           testId: testData.testId || cleanTestId,
           title: testData.title || 'Untitled Test',
           description: testData.description || '',
@@ -53,34 +73,8 @@ export const loadTestData = (testId: string): TestData | null => {
             generalInstructions: testData.instructions?.generalInstructions || [],
             importantNotes: testData.instructions?.importantNotes || []
           },
-          duration: testData.duration || 60, // Default 60 minutes
-          totalQuestions: testData.sections?.reduce((total: number, section: any) => 
-            total + (section.questions?.length || 0), 0) || 0,
-          passingScore: testData.passingScore || 50, // Default 50%
-          negativeMarking: false,
-          negativeMarksPerWrongAnswer: 0,
-          sections: testData.sections?.map((section: any, index: number) => ({
-            id: section.id || `section-${index + 1}`,
-            title: section.title || `Section ${index + 1}`,
-            description: section.description || '',
-            questionCount: section.questions?.length || 0,
-            questions: (section.questions || []).map((q: any, qIndex: number) => ({
-              id: q.id || `q-${index + 1}-${qIndex + 1}`,
-              question: q.question || 'Question text missing',
-              options: q.options || [],
-              correctAnswer: q.correctAnswer,
-              explanation: q.explanation,
-              marks: q.marks || 1,
-              sectionId: section.id || `section-${index + 1}`
-            }))
-          })) || [],
-          totalMarks: testData.sections?.reduce((total: number, section: any) => 
-            total + (section.questions?.length || 0), 0) || 0,
-          passingMarks: Math.ceil(
-            (testData.sections?.reduce((total: number, section: any) => 
-              total + (section.questions?.length || 0), 0) || 0) * 
-            ((testData.passingScore || 50) / 100)
-          )
+          sections: sections,
+          questions: allQuestions // For backward compatibility
         };
       }
     }

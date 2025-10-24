@@ -3,7 +3,7 @@ import { useDropzone, FileWithPath } from 'react-dropzone';
 import { FileText, Upload, X } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAuth } from '../../contexts/AuthContext';
-import { uploadStudyMaterial } from '../../services/studyMaterialService';
+import { uploadStudyMaterial } from '../../Services/studyMaterialService';
 
 interface UploadStudyMaterialProps {
   courseId: string;
