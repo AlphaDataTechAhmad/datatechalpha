@@ -405,7 +405,6 @@ We encourage you to take this opportunity to strengthen your skills and continue
       let maxScore = 0;
       let totalQuestions = 0;
       let answeredQuestions = 0;
-      let correctAnswers = 0;  // ← FIXED: Added this line
 
       // Calculate score and prepare submission data
       for (const section of testData.sections) {
@@ -555,13 +554,9 @@ We encourage you to take this opportunity to strengthen your skills and continue
     setIsSubmitting(true);
 
     try {
-      let score = 0;
-      let maxScore = 0;
-      let totalQuestions = 0;
-      let answeredQuestions = 0;
-      let correctAnswers = 0;  // ← FIXED: Added this line
-      
       // Calculate score and prepare submission data
+      // ... existing submission code ...
+      
       // Use for...of loops for proper async/await handling
       for (const section of testData.sections) {
         for (const question of section.questions) {
@@ -1025,3 +1020,4 @@ We encourage you to take this opportunity to strengthen your skills and continue
 };
 
 export default InternshipTestQuestions;
+
