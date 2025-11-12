@@ -54,7 +54,7 @@ const ExamSchedulingForm: React.FC<ExamSchedulingFormProps> = ({
             <p>Hello ${fullName},</p>
             <p>Thank you for applying to the internship program. Here is your test link:</p>
             <p><a href="${window.location.origin}${testLink}" target="_blank" style="font-size: 14px; font-family: Inter, sans-serif; color: #ffffff; text-decoration: none; background-color: #2D2D31; border-radius: 8px; padding: 9px 14px; border: 1px solid #414146; display: inline-block; text-align:center; box-sizing: border-box;">Start Your Test</a></p>
-            <p>Your test will be available 24 hours after application and will expire after 48 hours.</p>
+            <p>Your test will be available in 3 minutes after application and will expire after 48 hours.</p>
             <p style="margin-bottom: 32px">
                 Thanks,<br/>
                 DataTech Alpha Team
