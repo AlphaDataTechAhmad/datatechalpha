@@ -2,7 +2,7 @@ import { Client, Databases } from 'node-appwrite';
 import nodemailer from 'nodemailer';
 
 export default async ({ req, res, log, error }) => {
-    log('Test result email function started');
+    log('Test completion notification function started');
     
     try {
         // Parse the request body
@@ -23,7 +23,7 @@ export default async ({ req, res, log, error }) => {
             throw new Error('Test ID is required');
         }
 
-        log(Fetching document with ID: ${testId} );
+        log(`Fetching document with ID: ${testId}`);
         const document = await databases.getDocument(
             '68261b6a002ba6c3b584', // DATABASE_ID
             '689923bc000f2d15a263', // INTERNSHIP_TEST_LINKS_COLLECTION
@@ -36,14 +36,9 @@ export default async ({ req, res, log, error }) => {
         const {
             email = 'candidate@example.com',
             full_name: name = 'Student',
-            score = 0,
-            percentage = 0,
-            status = 'completed',
-            $updatedAt: completedAt
         } = document;
 
-        // Calculate total marks (you might need to adjust this based on your test structure)
-        const totalMarks = 100; // Adjust this based on your test structure
+        const testName = 'DSA Internship Test'; // You can make this dynamic if needed
 
         // SMTP configuration
         const smtpConfig = {
@@ -69,33 +64,33 @@ export default async ({ req, res, log, error }) => {
         // Verify connection configuration
         await transporter.verify();
 
-        // Calculate pass/fail
-        const passed = status === 'passed' || (typeof percentage === 'number' ? percentage >= 70 : parseFloat(percentage) >= 70);
-        const resultStatus = passed ? 'PASSED' : 'NOT PASSED';
-        const testName = 'DSA Internship Test'; // You can make this dynamic if needed
-
-        // Email content
+        // Email content - Simple acknowledgment message
         const emailHtml = `
             <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-                <h2 style="color: #2c3e50;">Pre-Exam Result and Next Steps: ${testName}</h2>
+                <h2 style="color: #2c3e50;">Test Submission Received: ${testName}</h2>
                 <p>Dear ${name},</p>
                 
-                <p>Thank you for completing the ${testName}.</p>
+                <p>Thank you for completing the <strong>${testName}</strong>.</p>
                 
-                <div style="background: #f8f9fa; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid ${passed ? '#2ecc71' : '#e74c3c'};">
-                    <h3 style="margin-top: 0; color: #2c3e50;">Your Results:</h3>
-                    <p>Score: <strong>${score} / ${totalMarks}</strong></p>
-                    <p>Percentage: <strong>${percentage}%</strong></p>
-                    <p>Status: <strong style="color: ${passed ? '#27ae60' : '#e74c3c'}">${resultStatus}</strong></p>
+                <div style="background: #e8f4f8; padding: 20px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #3498db;">
+                    <h3 style="margin-top: 0; color: #2c3e50;">✅ Test Completed Successfully</h3>
+                    <p style="font-size: 16px;">Your test has been submitted and is currently being reviewed by our team.</p>
+                    <p style="font-size: 16px;"><strong>Your results will be displayed soon.</strong></p>
                 </div>
 
-                ${passed ? 
-                    <p style="color: #27ae60;">🎉 Congratulations! You have successfully passed the test. Our team will review your submission and get back to you soon.</p>   :
-                    <p>Thank you for taking the test. We appreciate your effort and encourage you to try again in the future.</p>  
-                }
+                <p>Our evaluation team is carefully reviewing all submissions. You will receive your detailed results via email within the next 24-48 hours.</p>
+
+                <div style="background: #fff9e6; padding: 15px; border-radius: 8px; margin: 20px 0; border-left: 4px solid #f39c12;">
+                    <p style="margin: 0;"><strong>📧 Next Steps:</strong></p>
+                    <ul style="margin-top: 10px;">
+                        <li>Keep an eye on your email inbox for your results</li>
+                        <li>Check your spam/junk folder if you don't see our email</li>
+                        <li>If you have any questions, feel free to reach out to our support team</li>
+                    </ul>
+                </div>
 
                 <p style="margin-top: 30px; color: #7f8c8d; font-size: 0.9em;">
-                    If you have any questions, please don't hesitate to contact our support team.
+                    If you have any urgent questions, please contact us at <a href="mailto:hr@datatechalpha.com">hr@datatechalpha.com</a>
                 </p>
                 
                 <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #ecf0f1;">
@@ -105,14 +100,12 @@ export default async ({ req, res, log, error }) => {
         `;
 
         // Send email
-        log(Sending email to: ${email} );
+        log(`Sending acknowledgment email to: ${email}`);
+        
         const info = await transporter.sendMail({
             from: '"DataTech Alpha" <hr@datatechalpha.com>',
             to: email,
-            subject: Test Results: ${testName} 
-
-
-,
+            subject: `Test Submitted Successfully: ${testName}`,
             html: emailHtml
         });
 
@@ -120,21 +113,18 @@ export default async ({ req, res, log, error }) => {
         
         return res.json({
             success: true,
-            message: 'Test results email sent successfully',
+            message: 'Test completion notification sent successfully',
             data: {
                 email,
                 name,
                 testName,
-                score,
-                totalMarks,
-                percentage,
-                passed,
-                messageId: info.messageId
+                messageId: info.messageId,
+                message: 'Results will be displayed soon'
             }
         });
 
     } catch (err) {
-        error('Error sending test results email:', err);
+        error('Error sending test completion notification:', err);
         return res.json({
             success: false,
             error: err.message,
